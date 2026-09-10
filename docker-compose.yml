@@ -1,0 +1,73 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-fitnessgirl}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-fitnessgirl}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fitnessgirl}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-fitnessgirl}?schema=public
+      HOST: 0.0.0.0
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health | grep -q '\"ok\":true'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  indexer-daily:
+    profiles: ["cron"]
+    build:
+      context: .
+      target: tools
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fitnessgirl}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-fitnessgirl}?schema=public
+      VK_DAILY_LIMIT: "100"
+      VK_REQUEST_DELAY_MS: "1200"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["/bin/sh", "/app/scripts/daily-indexer-loop.sh"]
+
+  indexer:
+    profiles: ["tools"]
+    build:
+      context: .
+      target: tools
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fitnessgirl}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-fitnessgirl}?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["npx", "tsx", "scripts/index-vk.ts", "--daily"]
+
+volumes:
+  pgdata:

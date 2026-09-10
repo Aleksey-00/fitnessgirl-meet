@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Profile" ADD COLUMN IF NOT EXISTS "photoGender" TEXT;
+ALTER TABLE "Profile" ADD COLUMN IF NOT EXISTS "photoGenderConfidence" DOUBLE PRECISION;

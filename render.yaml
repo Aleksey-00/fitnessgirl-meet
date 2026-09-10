@@ -1,0 +1,71 @@
+# Render Blueprint — Free tier web + Postgres
+# Dashboard: New → Blueprint → connect this repo
+# Docs: https://render.com/docs/free
+#
+# Limits to accept on Free:
+# - Web sleeps after ~15 min idle (Telegram approve may lag on cold start)
+# - Free Postgres expires after 30 days unless upgraded
+# - Indexer/face-api: run locally against External Database URL (not on Free web)
+
+databases:
+  - name: fitnessgirl-db
+    plan: free
+    databaseName: fitnessgirl
+    user: fitnessgirl
+
+services:
+  - type: web
+    name: fitnessgirl-meet
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    domains:
+      - fitnessgirl-meet.ru
+      - www.fitnessgirl-meet.ru
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fitnessgirl-db
+          property: connectionString
+      - key: NUXT_PUBLIC_SITE_URL
+        value: https://fitnessgirl-meet.ru
+      - key: NUXT_PUBLIC_OG_IMAGE
+        value: https://fitnessgirl-meet.ru/og.jpg
+      - key: NUXT_SESSION_PASSWORD
+        generateValue: true
+      - key: TELEGRAM_WEBHOOK_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: PAYMENT_CARD
+        sync: false
+      - key: PAYMENT_PHONE
+        sync: false
+      - key: PAYMENT_HOLDER
+        sync: false
+      - key: SUBSCRIPTION_PRICE_RUB
+        value: "990"
+      - key: SUBSCRIPTION_DAYS
+        value: "30"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_ADMIN_CHAT_ID
+        sync: false
+      - key: VK_ACCESS_TOKEN
+        sync: false
+      - key: VK_CITY_ID
+        value: "1"
+      - key: VK_AGE_FROM
+        value: "18"
+      - key: VK_AGE_TO
+        value: "35"
+      - key: VK_SCORE_THRESHOLD
+        value: "2"
+      - key: VK_DAILY_LIMIT
+        value: "100"

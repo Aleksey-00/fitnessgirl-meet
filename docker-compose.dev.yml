@@ -1,0 +1,20 @@
+# Local overrides: exposes Postgres on host :5433 and runs Nuxt in dev mode.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fitnessgirl}
+    ports:
+      - "5433:5432"
+
+  app:
+    build: .
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.nuxt
+    command: npm run dev -- --host 0.0.0.0 --port 3000
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://fitnessgirl:${POSTGRES_PASSWORD:-fitnessgirl}@db:5432/fitnessgirl?schema=public
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fitnessgirl}

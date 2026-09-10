@@ -1,0 +1,18 @@
+# Reverse proxy + automatic HTTPS.
+# 1. Point DNS A/AAAA to this host
+# 2. Fill SITE_HOST (domain only, no https://) in the environment or below
+# 3. docker compose up -d --build
+# 4. caddy run --config ./Caddyfile
+#
+# Example: SITE_HOST=meet.example.com caddy run --config ./Caddyfile
+
+{$SITE_HOST:localhost} {
+	encode gzip zstd
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	reverse_proxy 127.0.0.1:3000
+}

@@ -1,0 +1,50 @@
+{
+  "name": "fitnessgirl-meet",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "index:vk": "tsx --env-file=.env scripts/index-vk.ts",
+    "index:daily": "tsx --env-file=.env scripts/index-vk.ts --daily",
+    "index:demo": "tsx --env-file=.env scripts/index-vk.ts --demo",
+    "check:photo-ages": "tsx --env-file=.env scripts/check-photo-ages.ts",
+    "check:faces": "tsx --env-file=.env scripts/check-photo-ages.ts",
+    "check:faces:all": "tsx --env-file=.env scripts/drain-face-checks.ts",
+    "check:catalog": "tsx --env-file=.env scripts/rescan-catalog.ts",
+    "download:face-models": "tsx --env-file=.env scripts/download-face-models.ts",
+    "dedupe:photos": "tsx --env-file=.env scripts/dedupe-photos.ts",
+    "telegram:webhook": "tsx --env-file=.env scripts/set-telegram-webhook.ts",
+    "telegram:poll": "tsx --env-file=.env scripts/telegram-poll.ts",
+    "start": "node .output/server/index.mjs",
+    "docker:prod": "docker compose up -d --build",
+    "docker:dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.1",
+    "bcryptjs": "^3.0.2",
+    "nuxt": "^3.16.2",
+    "prisma": "^6.16.1",
+    "tsx": "^4.19.3",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0",
+    "zod": "^3.24.2"
+  },
+  "optionalDependencies": {
+    "@tensorflow/tfjs-node": "^4.22.0",
+    "@vladmandic/face-api": "^1.7.15",
+    "sharp": "^0.35.4"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/sharp": "^0.31.1",
+    "typescript": "^5.8.2"
+  }
+}
