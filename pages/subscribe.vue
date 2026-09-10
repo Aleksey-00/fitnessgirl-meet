@@ -106,8 +106,11 @@ watch(
     <div class="container">
       <h1>Подписка</h1>
       <p class="lead">
-        Оплата переводом на карту / СБП. После поступления средств админ подтверждает заявку —
-        доступ на {{ info?.days || 30 }} дней.
+        Оплата переводом на карту / СБП.
+        <strong>Перевод нужно отправлять только через Сбербанк</strong>
+        (перевод из другого банка можем не принять).
+        После поступления средств админ подтверждает заявку — доступ на
+        {{ info?.days || 30 }} дней.
       </p>
 
       <div v-if="me?.subscribed" class="panel" style="margin-bottom: 1.25rem">
@@ -127,16 +130,21 @@ watch(
       </div>
 
       <div class="panel">
+        <p class="bank-notice" role="note">
+          Обязательно: перевод только из приложения / онлайн-банка <strong>Сбербанк</strong>.
+        </p>
         <dl>
+          <dt>Банк</dt>
+          <dd>{{ info?.bank || 'Сбербанк' }}</dd>
           <dt>Сумма</dt>
           <dd>{{ info?.priceRub || 990 }} ₽</dd>
           <dt>Срок</dt>
           <dd>{{ info?.days || 30 }} дней</dd>
           <dt>Получатель</dt>
           <dd>{{ info?.holder || '—' }}</dd>
-          <dt>Карта</dt>
+          <dt>Карта (Сбер)</dt>
           <dd>{{ info?.card || '—' }}</dd>
-          <dt>СБП / телефон</dt>
+          <dt>СБП / телефон (Сбер)</dt>
           <dd>{{ info?.phone || '—' }}</dd>
         </dl>
 
@@ -155,13 +163,13 @@ watch(
           @submit.prevent="claim"
         >
           <label>
-            Комментарий к переводу (необязательно: последние 4 цифры, имя в банке)
-            <input v-model="note" type="text" maxlength="200" placeholder="Например: перевод от Ивана, ****1234" />
+            Комментарий к переводу (необязательно: последние 4 цифры, имя в Сбере)
+            <input v-model="note" type="text" maxlength="200" placeholder="Например: перевод из Сбера от Ивана, ****1234" />
           </label>
           <p v-if="error" class="error">{{ error }}</p>
           <p v-if="message" class="ok">{{ message }}</p>
           <button class="btn btn-primary" type="submit" :disabled="pending">
-            {{ pending ? 'Отправляем…' : 'Я перевёл' }}
+            {{ pending ? 'Отправляем…' : 'Я перевёл из Сбербанка' }}
           </button>
         </form>
       </div>
@@ -175,6 +183,16 @@ watch(
   color: var(--accent);
   font-weight: 600;
   animation: waiting-pulse 1.6s ease-in-out infinite;
+}
+
+.bank-notice {
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text);
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 @keyframes waiting-pulse {

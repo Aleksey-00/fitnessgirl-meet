@@ -36,7 +36,7 @@ async function submit() {
   <section class="section">
     <div class="container">
       <h1>Регистрация</h1>
-      <p class="lead">Создайте аккаунт — дальше перевод на карту и активация доступа.</p>
+      <p class="lead">Создайте аккаунт — дальше перевод из Сбербанка и активация доступа.</p>
       <form class="form" @submit.prevent="submit">
         <label>
           Email

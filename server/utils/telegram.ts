@@ -39,6 +39,7 @@ export async function notifyNewPaymentClaim(opts: {
 
   const text = [
     '💳 Новая заявка на подписку',
+    'Банк отправителя: только Сбербанк',
     `Email: ${opts.email}`,
     `Сумма: ${opts.amount} ₽`,
     `Комментарий: ${opts.note || '—'}`,

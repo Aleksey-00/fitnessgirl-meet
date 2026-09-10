@@ -35,6 +35,7 @@ export default defineNuxtConfig({
     paymentCard: process.env.PAYMENT_CARD || '',
     paymentPhone: process.env.PAYMENT_PHONE || '',
     paymentHolder: process.env.PAYMENT_HOLDER || '',
+    paymentBank: process.env.PAYMENT_BANK || 'Сбербанк',
     subscriptionPriceRub: Number(process.env.SUBSCRIPTION_PRICE_RUB || 990),
     subscriptionDays: Number(process.env.SUBSCRIPTION_DAYS || 30),
     telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
