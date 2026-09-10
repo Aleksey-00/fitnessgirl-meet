@@ -18,15 +18,20 @@ RUN npm ci --legacy-peer-deps --ignore-scripts
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 ENV NODE_ENV=production
+# Free Render builders are tight on RAM; keep Nuxt build from OOMing when possible.
+ENV NODE_OPTIONS=--max-old-space-size=1536
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate
 RUN npm run build
-# Drop ML optional packages from the runtime node_modules copied into runner.
-RUN npm prune --omit=dev --legacy-peer-deps \
-  && npm uninstall --legacy-peer-deps --no-save \
+# Keep runtime lean: drop ML optional packages (used only by tools/indexer).
+RUN npm uninstall --legacy-peer-deps --no-save \
     @tensorflow/tfjs-node @vladmandic/face-api sharp \
-    @types/bcryptjs @types/sharp typescript 2>/dev/null || true
+    @types/bcryptjs @types/sharp typescript \
+  || true
+RUN npm prune --omit=dev --legacy-peer-deps || true
 
 FROM node:22-bookworm-slim AS tools
 WORKDIR /app
