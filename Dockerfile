@@ -2,21 +2,31 @@
 # Default / last stage is runner — required for Render and plain `docker build`.
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
+# Render may inject NODE_ENV=production; keep devDeps available for the Nuxt build.
+ENV NODE_ENV=development
 COPY package.json package-lock.json ./
-# Production app deps only (skip optional ML packages)
-RUN npm ci --legacy-peer-deps --omit=optional
+# Do NOT use --omit=optional here: Nuxt needs optional platform bindings (oxc-parser).
+# Skip postinstall (nuxt prepare) — project sources are not copied yet.
+RUN npm ci --legacy-peer-deps --ignore-scripts
 
 FROM node:22-bookworm-slim AS deps-tools
 WORKDIR /app
+ENV NODE_ENV=development
 COPY package.json package-lock.json ./
-RUN npm ci --legacy-peer-deps
+RUN npm ci --legacy-peer-deps --ignore-scripts
 
 FROM node:22-bookworm-slim AS builder
 WORKDIR /app
+ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate
 RUN npm run build
+# Drop ML optional packages from the runtime node_modules copied into runner.
+RUN npm prune --omit=dev --legacy-peer-deps \
+  && npm uninstall --legacy-peer-deps --no-save \
+    @tensorflow/tfjs-node @vladmandic/face-api sharp \
+    @types/bcryptjs @types/sharp typescript 2>/dev/null || true
 
 FROM node:22-bookworm-slim AS tools
 WORKDIR /app
@@ -45,7 +55,7 @@ ENV PORT=3000
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates wget \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/.output ./.output
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/package-lock.json ./package-lock.json
 COPY --from=builder /app/prisma ./prisma
