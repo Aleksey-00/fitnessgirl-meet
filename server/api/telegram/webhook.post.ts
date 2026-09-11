@@ -1,6 +1,5 @@
 export default defineEventHandler(async (event) => {
-  const config = useRuntimeConfig()
-  const secret = String(config.telegramWebhookSecret || '').trim()
+  const secret = getTelegramRuntime().webhookSecret
   if (process.env.NODE_ENV === 'production' && !secret) {
     throw createError({ statusCode: 503, statusMessage: 'Webhook secret not configured' })
   }

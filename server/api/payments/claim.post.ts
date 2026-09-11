@@ -6,7 +6,7 @@ const bodySchema = z.object({
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
-  const config = useRuntimeConfig()
+  const payment = getPaymentRuntime()
   const parsed = bodySchema.safeParse((await readBody(event)) || {})
   if (!parsed.success) {
     throw createError({ statusCode: 400, statusMessage: 'Некорректные данные' })
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const claim = await prisma.paymentClaim.create({
     data: {
       userId: user.id,
-      amount: Number(config.subscriptionPriceRub) || 990,
+      amount: payment.priceRub,
       note: parsed.data.note || null
     }
   })

@@ -39,8 +39,7 @@ export async function resolvePaymentClaim(claimId: string, action: 'approve' | '
     }
   }
 
-  const config = useRuntimeConfig()
-  const days = Number(config.subscriptionDays) || 30
+  const days = getPaymentRuntime().days
   const startsAt = new Date()
   const expiresAt = new Date(startsAt.getTime() + days * 24 * 60 * 60 * 1000)
 

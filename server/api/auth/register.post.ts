@@ -18,8 +18,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: 'Email уже зарегистрирован' })
   }
 
-  const config = useRuntimeConfig()
-  const role = email === String(config.adminEmail).toLowerCase() ? 'admin' : 'user'
+  const role = email === getAdminEmail().toLowerCase() ? 'admin' : 'user'
   const passwordHash = await hashPassword(parsed.data.password)
 
   const user = await prisma.user.create({

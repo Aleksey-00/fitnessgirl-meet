@@ -44,8 +44,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const config = useRuntimeConfig()
-  if (email === String(config.adminEmail).toLowerCase() && user.role !== 'admin') {
+  if (email === getAdminEmail().toLowerCase() && user.role !== 'admin') {
     await prisma.user.update({ where: { id: user.id }, data: { role: 'admin' } })
     user.role = 'admin'
   }

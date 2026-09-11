@@ -3,11 +3,11 @@ type TelegramInlineKeyboard = {
 }
 
 function botToken() {
-  return String(useRuntimeConfig().telegramBotToken || '').trim()
+  return getTelegramRuntime().botToken
 }
 
 function adminChatId() {
-  return String(useRuntimeConfig().telegramAdminChatId || '').trim()
+  return getTelegramRuntime().adminChatId
 }
 
 export function telegramEnabled() {
