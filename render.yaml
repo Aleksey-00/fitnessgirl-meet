@@ -40,7 +40,8 @@ services:
       - key: NUXT_SESSION_PASSWORD
         generateValue: true
       - key: TELEGRAM_WEBHOOK_SECRET
-        generateValue: true
+        # Must be A-Z a-z 0-9 _ - only (Telegram rejects base64 from generateValue)
+        sync: false
       - key: ADMIN_EMAIL
         sync: false
       - key: PAYMENT_CARD

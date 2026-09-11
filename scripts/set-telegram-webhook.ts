@@ -14,6 +14,11 @@ async function main() {
   if (!secret || secret.length < 16 || /change.?me|example/i.test(secret)) {
     throw new Error('TELEGRAM_WEBHOOK_SECRET is required (strong random string, ≥16 chars)')
   }
+  if (!/^[A-Za-z0-9_-]+$/.test(secret)) {
+    throw new Error(
+      'TELEGRAM_WEBHOOK_SECRET may only contain A-Z, a-z, 0-9, _ and - (no +, /, =). Generate with: openssl rand -hex 32'
+    )
+  }
 
   const url = `${siteUrl}/api/telegram/webhook`
   const body: Record<string, unknown> = {
