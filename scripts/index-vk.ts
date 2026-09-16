@@ -249,7 +249,11 @@ async function upsertUser(
   })
 
   existingIds.add(vkId)
-  return existed ? 'updated' : 'created'
+  const tag = existed ? 'updated' : 'created'
+  console.log(
+    `${tag} vk=${vkId} name=${displayName} age=${scored.signals.age ?? '?'} score=${scored.score} photoAge=${face.estimatedAge ?? '?'}`
+  )
+  return tag
 }
 
 /** Once per day: add ~N new profiles, rotating age/name shards by calendar day. */

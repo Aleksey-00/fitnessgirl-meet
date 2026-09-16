@@ -18,15 +18,13 @@ async function submit() {
     const digest = await passwordDigest(password.value)
     await $fetch('/api/auth/register', {
       method: 'POST',
+      credentials: 'include',
       body: { email: email.value, password: digest }
     })
-    const { refresh } = useAuth()
-    await refresh()
     clearNuxtData('catalog-first-page')
-    await navigateTo('/subscribe')
+    window.location.assign('/subscribe')
   } catch (e: any) {
     error.value = e?.data?.statusMessage || 'Ошибка регистрации'
-  } finally {
     pending.value = false
   }
 }

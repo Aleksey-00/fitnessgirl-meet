@@ -58,7 +58,15 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates wget \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \
+  && wget -qO /tmp/docker.tgz https://download.docker.com/linux/static/stable/x86_64/docker-27.3.1.tgz \
+  && tar -xzf /tmp/docker.tgz -C /tmp \
+  && mv /tmp/docker/docker /usr/local/bin/docker \
+  && rm -rf /tmp/docker /tmp/docker.tgz \
+  && wget -qO /usr/local/bin/docker-compose \
+    https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-x86_64 \
+  && chmod +x /usr/local/bin/docker /usr/local/bin/docker-compose
+
 COPY --from=builder /app/.output ./.output
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json

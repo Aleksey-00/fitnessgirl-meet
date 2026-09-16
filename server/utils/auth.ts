@@ -35,6 +35,20 @@ function cookieOpts(event: H3Event) {
   }
 }
 
+/** Drop both host-only and Domain=.fitnessgirl-meet.ru leftovers (duplicate Cookie breaks auth). */
+function purgeSessionCookies(event: H3Event) {
+  const base = {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: cookieSecure(event)
+  }
+  deleteCookie(event, COOKIE_NAME, base)
+  deleteCookie(event, COOKIE_NAME, { ...base, domain: '.fitnessgirl-meet.ru' })
+  deleteCookie(event, COOKIE_NAME, { ...base, domain: 'fitnessgirl-meet.ru' })
+  deleteCookie(event, COOKIE_NAME, { ...base, domain: 'www.fitnessgirl-meet.ru' })
+}
+
 function sign(payload: SessionPayload): string {
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
   const sig = createHmac('sha256', getSecret()).update(body).digest('base64url')
@@ -109,22 +123,33 @@ export function setUserSession(event: H3Event, user: { id: string; email: string
     role: user.role,
     exp: Date.now() + 1000 * 60 * 60 * 24 * SESSION_DAYS
   })
+  // Always wipe old variants first — browsers may send multiple fg_session values.
+  purgeSessionCookies(event)
   setCookie(event, COOKIE_NAME, token, cookieOpts(event))
 }
 
 export function clearUserSession(event: H3Event) {
-  deleteCookie(event, COOKIE_NAME, {
-    path: '/',
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: cookieSecure(event)
-  })
+  purgeSessionCookies(event)
 }
 
 export function readSession(event: H3Event): SessionPayload | null {
-  const token = getCookie(event, COOKIE_NAME)
-  if (!token) return null
-  return verify(token)
+  const header = String(getRequestHeader(event, 'cookie') || '')
+  const tokens = [...header.matchAll(/(?:^|;\s*)fg_session=([^;]*)/gi)].map((m) => {
+    try {
+      return decodeURIComponent(m[1].trim())
+    } catch {
+      return m[1].trim()
+    }
+  })
+  // Prefer the last value (newest Set-Cookie usually appends last).
+  for (const token of tokens.reverse()) {
+    if (!token) continue
+    const session = verify(token)
+    if (session) return session
+  }
+  // Fallback for parsers that already picked one.
+  const single = getCookie(event, COOKIE_NAME)
+  return single ? verify(single) : null
 }
 
 export async function requireUser(event: H3Event) {

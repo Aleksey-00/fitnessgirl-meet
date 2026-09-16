@@ -1,13 +1,13 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-fitnessgirl}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-fitnessgirl}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
@@ -23,11 +23,16 @@ services:
       - "3000:3000"
     env_file:
       - .env
+    volumes:
+      # Host project dir (VPS: INDEXER_HOST_DIR=/opt/fitnessgirl-meet) + Docker for admin indexer UI
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${INDEXER_HOST_DIR:-.}:/work/project
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-fitnessgirl}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-fitnessgirl}?schema=public
       HOST: 0.0.0.0
       PORT: 3000
+      INDEXER_PROJECT_DIR: /work/project
     depends_on:
       db:
         condition: service_healthy

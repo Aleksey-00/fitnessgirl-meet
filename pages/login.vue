@@ -19,6 +19,7 @@ async function submit() {
     try {
       await $fetch('/api/auth/login', {
         method: 'POST',
+        credentials: 'include',
         body: { email: email.value, password: digest }
       })
     } catch (e: any) {
@@ -26,6 +27,7 @@ async function submit() {
       if (e?.statusCode !== 401 && e?.status !== 401) throw e
       await $fetch('/api/auth/login', {
         method: 'POST',
+        credentials: 'include',
         body: {
           email: email.value,
           password: digest,
@@ -33,15 +35,28 @@ async function submit() {
         }
       })
     }
-    const { refresh } = useAuth()
-    await refresh()
-    clearNuxtData('catalog-first-page')
-    await navigateTo('/catalog')
   } catch (e: any) {
-    error.value = e?.data?.statusMessage || 'Ошибка входа'
-  } finally {
+    const status = e?.statusCode || e?.status
+    const msg = e?.data?.statusMessage || e?.statusMessage || e?.message
+    if (status === 401) {
+      error.value = msg || 'Неверный email или пароль'
+    } else if (!status || status === 502 || status === 503 || status === 504) {
+      error.value =
+        'Сервер не ответил. Откройте https://www.fitnessgirl-meet.ru/login (именно www) и отключите VPN для этого сайта.'
+    } else {
+      error.value = msg || `Ошибка входа${status ? ` (${status})` : ''}`
+    }
     pending.value = false
+    return
   }
+
+  // Full reload so httpOnly session cookie is picked up; skip useAuth().ready (not exported).
+  try {
+    clearNuxtData('catalog-first-page')
+  } catch {
+    /* ignore */
+  }
+  window.location.assign('/catalog')
 }
 </script>
 
