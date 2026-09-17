@@ -29,15 +29,13 @@ async function telegramApi(method: string, body: Record<string, unknown>) {
   return data
 }
 
-export async function notifyNewPaymentClaim(opts: {
+export function paymentClaimTelegramText(opts: {
   claimId: string
   email: string
   amount: number
   note?: string | null
 }) {
-  if (!telegramEnabled()) return
-
-  const text = [
+  return [
     '💳 Новая заявка на подписку',
     'Получатель: только Сбербанк',
     `Email: ${opts.email}`,
@@ -45,16 +43,17 @@ export async function notifyNewPaymentClaim(opts: {
     `Комментарий: ${opts.note || '—'}`,
     `ID: ${opts.claimId}`
   ].join('\n')
+}
 
+export function paymentClaimTelegramKeyboard(claimId: string): TelegramInlineKeyboard | null {
   // callback_data max 64 bytes
-  const approve = `ok:${opts.claimId}`
-  const reject = `no:${opts.claimId}`
+  const approve = `ok:${claimId}`
+  const reject = `no:${claimId}`
   if (approve.length > 64 || reject.length > 64) {
     console.error('Telegram callback_data too long for claim id')
-    return
+    return null
   }
-
-  const reply_markup: TelegramInlineKeyboard = {
+  return {
     inline_keyboard: [
       [
         { text: '✅ Подтвердить', callback_data: approve },
@@ -62,12 +61,26 @@ export async function notifyNewPaymentClaim(opts: {
       ]
     ]
   }
+}
 
-  await telegramApi('sendMessage', {
+/** @returns true when Telegram accepted sendMessage */
+export async function notifyNewPaymentClaim(opts: {
+  claimId: string
+  email: string
+  amount: number
+  note?: string | null
+}): Promise<boolean> {
+  if (!telegramEnabled()) return false
+
+  const reply_markup = paymentClaimTelegramKeyboard(opts.claimId)
+  if (!reply_markup) return false
+
+  const data = await telegramApi('sendMessage', {
     chat_id: adminChatId(),
-    text,
+    text: paymentClaimTelegramText(opts),
     reply_markup
   })
+  return Boolean(data?.ok)
 }
 
 export async function answerTelegramCallback(opts: {

@@ -3,6 +3,11 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: process.env.NODE_ENV !== 'production' },
   css: ['~/assets/css/main.css'],
+  // Avoid /_nuxt/builds/meta/*.json fetches — they 404 when a CDN/proxy/cache
+  // serves a stale tree after deploys and spam the console with hydration noise.
+  experimental: {
+    appManifest: false
+  },
   app: {
     head: {
       htmlAttrs: { lang: 'ru' },
@@ -17,7 +22,9 @@ export default defineNuxtConfig({
         { name: 'twitter:card', content: 'summary_large_image' }
       ],
       link: [
-        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg?v=2' },
+        { rel: 'icon', type: 'image/x-icon', href: '/favicon.ico?v=2' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png?v=2' },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         {
@@ -61,6 +68,11 @@ export default defineNuxtConfig({
       external: ['@tensorflow/tfjs-node', '@vladmandic/face-api', 'sharp']
     },
     routeRules: {
+      '/_nuxt/builds/**': {
+        headers: {
+          'Cache-Control': 'no-store'
+        }
+      },
       '/**': {
         headers: {
           'X-Content-Type-Options': 'nosniff',

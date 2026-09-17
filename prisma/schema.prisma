@@ -48,16 +48,19 @@ model Subscription {
 }
 
 model PaymentClaim {
-  id        String      @id @default(cuid())
-  userId    String
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount    Int
-  note      String?
-  status    ClaimStatus @default(pending)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  id                 String      @id @default(cuid())
+  userId             String
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount             Int
+  note               String?
+  status             ClaimStatus @default(pending)
+  /** Set when admin Telegram message with approve/reject buttons was sent. */
+  telegramNotifiedAt DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   @@index([status])
+  @@index([status, telegramNotifiedAt])
 }
 
 model Profile {

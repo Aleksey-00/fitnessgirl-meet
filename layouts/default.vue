@@ -1,6 +1,10 @@
 <script setup lang="ts">
-const { me, ensureLoaded, logout } = useAuth()
-await ensureLoaded()
+const { me, ensureLoaded, refresh, logout } = useAuth()
+// Only block SSR on auth. Re-fetching on the client during setup races hydration
+// (cookie/session can differ from the SSR payload → nav mismatch warning).
+if (import.meta.server) {
+  await ensureLoaded()
+}
 
 const menuOpen = ref(false)
 const route = useRoute()
@@ -31,6 +35,8 @@ function onKeydown(e: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
+  // After hydrate: quietly sync session (updates nav if cookie appeared).
+  refresh().catch(() => {})
 })
 
 onBeforeUnmount(() => {

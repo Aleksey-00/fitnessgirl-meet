@@ -1,0 +1,16 @@
+[Unit]
+Description=Fitnessgirl Meet — home Telegram bridge (notify + approve)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/azorabekov-a/Desktop/projects/fitnessgirl-meet
+ExecStart=/home/azorabekov-a/Desktop/projects/fitnessgirl-meet/scripts/run-home-telegram.sh
+Restart=always
+RestartSec=15
+# Do not buffer script output
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=default.target

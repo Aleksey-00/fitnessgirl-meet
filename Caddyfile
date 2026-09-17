@@ -1,18 +1,42 @@
-# Reverse proxy + automatic HTTPS.
-# 1. Point DNS A/AAAA to this host
-# 2. Fill SITE_HOST (domain only, no https://) in the environment or below
-# 3. docker compose up -d --build
-# 4. caddy run --config ./Caddyfile
+# Reverse proxy + automatic HTTPS (host Caddy → Nuxt on :3000).
+# Canonical host: apex (fitnessgirl-meet.ru). www → 301 to apex.
 #
-# Example: SITE_HOST=meet.example.com caddy run --config ./Caddyfile
+# 1. Point DNS A/AAAA for @ and www to this host
+# 2. Keep /_nuxt proxied to the app — do not file_server a copied tree
 
-{$SITE_HOST:localhost} {
+{
+	servers {
+		protocols h1 h2
+	}
+}
+
+www.fitnessgirl-meet.ru {
+	redir https://fitnessgirl-meet.ru{uri} permanent
+}
+
+fitnessgirl-meet.ru {
 	encode gzip zstd
 	header {
+		Alt-Svc "clear"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
 		Referrer-Policy strict-origin-when-cross-origin
 	}
-	reverse_proxy 127.0.0.1:3000
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 50MiB
+			roll_keep 10
+		}
+		format json
+	}
+
+	# Always proxy to Nuxt (including /_nuxt) so build manifests stay in sync.
+	reverse_proxy 127.0.0.1:3000 {
+		transport http {
+			read_timeout 3600s
+			write_timeout 3600s
+		}
+	}
 }

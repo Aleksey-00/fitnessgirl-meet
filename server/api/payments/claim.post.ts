@@ -28,13 +28,20 @@ export default defineEventHandler(async (event) => {
   })
 
   try {
-    await notifyNewPaymentClaim({
+    const sent = await notifyNewPaymentClaim({
       claimId: claim.id,
       email: user.email,
       amount: claim.amount,
       note: claim.note
     })
+    if (sent) {
+      await prisma.paymentClaim.update({
+        where: { id: claim.id },
+        data: { telegramNotifiedAt: new Date() }
+      })
+    }
   } catch (e) {
+    // VPS often cannot reach api.telegram.org — home bridge will notify instead.
     console.error('Telegram notify failed', e)
   }
 

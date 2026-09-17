@@ -1,6 +1,8 @@
 /**
- * Local fallback: poll Telegram updates when webhook is unavailable.
- * Usage: npm run telegram:poll
+ * Home Telegram bridge: notify pending claims + poll approve/reject callbacks.
+ * Use when the VPS cannot reach api.telegram.org (or Telegram cannot reach the VPS webhook).
+ *
+ * Prefer: ./scripts/run-home-telegram.sh
  */
 import { PrismaClient } from '@prisma/client'
 
@@ -23,9 +25,73 @@ async function api(method: string, body?: Record<string, unknown>) {
       body: JSON.stringify(body || {}),
       signal: controller.signal
     })
-    return (await res.json()) as any
+    return (await res.json()) as {
+      ok: boolean
+      description?: string
+      result?: any
+    }
   } finally {
     clearTimeout(timer)
+  }
+}
+
+function claimText(opts: { claimId: string; email: string; amount: number; note?: string | null }) {
+  return [
+    '💳 Новая заявка на подписку',
+    'Получатель: только Сбербанк',
+    `Email: ${opts.email}`,
+    `Сумма: ${opts.amount} ₽`,
+    `Комментарий: ${opts.note || '—'}`,
+    `ID: ${opts.claimId}`
+  ].join('\n')
+}
+
+type PendingRow = { id: string; amount: number; note: string | null; email: string }
+
+async function notifyPendingClaims() {
+  // Raw SQL so an older Prisma client (tools image) still works after ALTER TABLE.
+  const pending = await prisma.$queryRaw<PendingRow[]>`
+    SELECT c.id, c.amount, c.note, u.email
+    FROM "PaymentClaim" c
+    JOIN "User" u ON u.id = c."userId"
+    WHERE c.status = 'pending' AND c."telegramNotifiedAt" IS NULL
+    ORDER BY c."createdAt" ASC
+    LIMIT 20
+  `
+  for (const claim of pending) {
+    const approve = `ok:${claim.id}`
+    const reject = `no:${claim.id}`
+    if (approve.length > 64 || reject.length > 64) {
+      console.error('callback_data too long', claim.id)
+      continue
+    }
+    const sent = await api('sendMessage', {
+      chat_id: adminChatId,
+      text: claimText({
+        claimId: claim.id,
+        email: claim.email,
+        amount: claim.amount,
+        note: claim.note
+      }),
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ Подтвердить', callback_data: approve },
+            { text: '❌ Отклонить', callback_data: reject }
+          ]
+        ]
+      }
+    })
+    if (!sent?.ok) {
+      console.error('notify failed', claim.id, sent?.description || sent)
+      continue
+    }
+    await prisma.$executeRaw`
+      UPDATE "PaymentClaim"
+      SET "telegramNotifiedAt" = NOW(), "updatedAt" = NOW()
+      WHERE id = ${claim.id}
+    `
+    console.log(`notified claim ${claim.id} (${claim.email})`)
   }
 }
 
@@ -67,10 +133,10 @@ async function resolve(claimId: string, action: 'approve' | 'reject') {
 }
 
 let offset = 0
-console.log('Polling Telegram callbacks… Ctrl+C to stop')
-console.log(`Admin chat id: ${adminChatId}`)
 
 async function loop() {
+  await notifyPendingClaims()
+
   const data = await api('getUpdates', {
     offset,
     timeout: 25,
@@ -118,7 +184,12 @@ async function loop() {
 }
 
 async function main() {
-  // Drop webhook so polling works locally
+  console.log('Home Telegram bridge starting…')
+  console.log(`Admin chat id: ${adminChatId}`)
+  // Ensure column exists (idempotent).
+  await prisma.$executeRawUnsafe(`
+    ALTER TABLE "PaymentClaim" ADD COLUMN IF NOT EXISTS "telegramNotifiedAt" TIMESTAMP(3)
+  `)
   const del = await api('deleteWebhook', { drop_pending_updates: false })
   console.log('deleteWebhook:', del?.ok ? 'ok' : del)
   for (;;) {

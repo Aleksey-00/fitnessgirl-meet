@@ -36,8 +36,9 @@ RUN npm prune --omit=dev --legacy-peer-deps || true
 FROM node:22-bookworm-slim AS tools
 WORKDIR /app
 ENV NODE_ENV=production
+# Native addons (tfjs-node, sharp) need a full toolchain; image is amd64/linux.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssl ca-certificates python3 make g++ \
+    openssl ca-certificates python3 make g++ pkg-config \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=deps-tools /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
@@ -47,6 +48,12 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/server/utils ./server/utils
 COPY --from=builder /app/models ./models
+# deps-tools used --ignore-scripts (nuxt prepare needs full tree) — generate Prisma
+# and build native bindings here.
+RUN npx prisma generate \
+  && npm rebuild sharp \
+  && npm rebuild @tensorflow/tfjs-node --build-addon-from-source \
+  && test -f node_modules/@tensorflow/tfjs-node/lib/napi-v8/tfjs_binding.node
 COPY docker/entrypoint-tools.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh /app/scripts/daily-indexer-loop.sh
 ENTRYPOINT ["/entrypoint.sh"]

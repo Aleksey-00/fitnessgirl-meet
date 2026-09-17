@@ -4,22 +4,17 @@ definePageMeta({
 })
 
 const { data: claims, refresh: refreshClaims } = await useFetch('/api/admin/claims')
-const { data: indexerStatus, refresh: refreshIndexer } = await useFetch('/api/admin/indexer')
+const { data: tokenStatus, refresh: refreshToken } = await useFetch('/api/admin/indexer')
 
 const busyId = ref<string | null>(null)
 const error = ref('')
-
+const okMsg = ref('')
 const token = ref('')
-const limit = ref(100)
-const mode = ref<'daily' | 'full'>('daily')
-const saveToken = ref(true)
-const indexing = ref(false)
-const logs = ref('')
-const logEl = ref<HTMLElement | null>(null)
+const saving = ref(false)
 
 usePageSeo({
   title: 'Админ',
-  description: 'Панель модерации платежей и индексации VK.',
+  description: 'Панель модерации платежей и VK-токена.',
   path: '/admin',
   noindex: true
 })
@@ -40,51 +35,26 @@ async function act(claimId: string, action: 'approve' | 'reject') {
   }
 }
 
-function appendLog(chunk: string) {
-  logs.value += chunk
-  nextTick(() => {
-    if (logEl.value) logEl.value.scrollTop = logEl.value.scrollHeight
-  })
-}
-
-async function startIndexer() {
+async function saveVkToken() {
   error.value = ''
+  okMsg.value = ''
   if (!token.value.trim()) {
     error.value = 'Вставьте VK access token'
     return
   }
-  indexing.value = true
-  logs.value = ''
+  saving.value = true
   try {
-    const res = await fetch('/api/admin/indexer', {
+    const res = await $fetch<{ ok: boolean; tokenLength: number; hint: string }>('/api/admin/indexer', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        token: token.value.trim(),
-        limit: Number(limit.value) || 100,
-        mode: mode.value,
-        saveToken: saveToken.value
-      }),
-      credentials: 'same-origin'
+      body: { token: token.value.trim() }
     })
-    if (!res.ok) {
-      const msg = await res.text()
-      throw new Error(msg || `HTTP ${res.status}`)
-    }
-    const reader = res.body?.getReader()
-    if (!reader) throw new Error('Нет потока логов')
-    const dec = new TextDecoder()
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      appendLog(dec.decode(value, { stream: true }))
-    }
+    okMsg.value = res.hint || 'Токен сохранён'
+    token.value = ''
+    await refreshToken()
   } catch (e: any) {
-    error.value = e?.message || 'Ошибка индексации'
-    appendLog(`\n# client error: ${error.value}\n`)
+    error.value = e?.data?.statusMessage || e?.message || 'Не удалось сохранить токен'
   } finally {
-    indexing.value = false
-    await refreshIndexer()
+    saving.value = false
   }
 }
 </script>
@@ -94,52 +64,44 @@ async function startIndexer() {
     <div class="container">
       <h1>Админ</h1>
       <p v-if="error" class="form error">{{ error }}</p>
+      <p v-if="okMsg" class="lead" style="color: var(--accent)">{{ okMsg }}</p>
 
-      <h2 class="admin-h2">Пополнить базу VK</h2>
+      <h2 class="admin-h2">VK-токен для индексации</h2>
       <p class="lead">
-        Вставьте токен (строка или кусок URL с <code>access_token=</code>), нажмите кнопку — ниже пойдёт живой лог.
+        Сохраните свежий токен в <code>.env</code> на сервере. Пополнение базы запускайте с домашнего ПК
+        (токен привязан к вашему IP):
+        <code>./scripts/run-home-indexer.sh</code>
       </p>
 
-      <div v-if="indexerStatus && !indexerStatus.available" class="form error" style="max-width: 720px">
-        Индексатор недоступен: {{ indexerStatus.reason }}
+      <div v-if="tokenStatus && !tokenStatus.available" class="form error" style="max-width: 720px">
+        Нельзя записать .env: {{ tokenStatus.reason }}
       </div>
+      <p v-else-if="tokenStatus" class="lead">
+        Сейчас в .env:
+        <template v-if="tokenStatus.configured">
+          токен есть (длина {{ tokenStatus.tokenLength }})
+        </template>
+        <template v-else>токен не задан</template>
+      </p>
 
-      <form class="form admin-index-form" @submit.prevent="startIndexer">
+      <form class="form admin-index-form" @submit.prevent="saveVkToken">
         <label>
           VK_ACCESS_TOKEN
           <textarea
             v-model="token"
             rows="3"
             placeholder="vk1.a.... или …access_token=…&expires_in=0"
-            :disabled="indexing"
             autocomplete="off"
           />
-        </label>
-        <label>
-          Режим
-          <select v-model="mode" :disabled="indexing">
-            <option value="daily">Daily (~лимит новых анкет)</option>
-            <option value="full">Full (длинный прогон)</option>
-          </select>
-        </label>
-        <label>
-          Лимит
-          <input v-model.number="limit" type="number" min="1" max="2000" :disabled="indexing" />
-        </label>
-        <label class="check">
-          <input v-model="saveToken" type="checkbox" :disabled="indexing" />
-          Сохранить токен в .env на сервере
         </label>
         <button
           class="btn btn-primary"
           type="submit"
-          :disabled="indexing || (indexerStatus && !indexerStatus.available)"
+          :disabled="saving || (tokenStatus && !tokenStatus.available)"
         >
-          {{ indexing ? 'Идёт индексация…' : 'Пополнить базу' }}
+          {{ saving ? 'Сохраняю…' : 'Сохранить токен' }}
         </button>
       </form>
-
-      <pre ref="logEl" class="admin-log" aria-live="polite">{{ logs || 'Лог появится здесь…' }}</pre>
 
       <h2 class="admin-h2">Заявки на оплату</h2>
       <p class="lead">Подтвердите перевод — пользователю откроется подписка.</p>
@@ -199,34 +161,5 @@ async function startIndexer() {
 }
 .admin-index-form {
   max-width: 720px;
-}
-.admin-index-form select {
-  width: 100%;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--ink);
-  padding: 0.75rem 0.85rem;
-}
-.check {
-  display: flex !important;
-  align-items: center;
-  gap: 0.5rem;
-  grid-template-columns: none;
-}
-.admin-log {
-  margin-top: 1rem;
-  max-width: 960px;
-  max-height: 420px;
-  overflow: auto;
-  padding: 1rem;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: #0b0f0c;
-  color: #c8f06c;
-  font-size: 0.8rem;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 </style>

@@ -1,6 +1,7 @@
 export default defineEventHandler((event) => {
   const config = useRuntimeConfig(event)
   const siteUrl = String(config.public.siteUrl || 'http://localhost:3000').replace(/\/$/, '')
+  const host = siteUrl.replace(/^https?:\/\//, '')
 
   const body = [
     'User-agent: *',
@@ -10,7 +11,21 @@ export default defineEventHandler((event) => {
     'Disallow: /register',
     'Disallow: /api/',
     '',
-    `Host: ${siteUrl.replace(/^https?:\/\//, '')}`,
+    'User-agent: Googlebot',
+    'Allow: /',
+    'Disallow: /admin',
+    'Disallow: /login',
+    'Disallow: /register',
+    'Disallow: /api/',
+    '',
+    'User-agent: Yandex',
+    'Allow: /',
+    'Disallow: /admin',
+    'Disallow: /login',
+    'Disallow: /register',
+    'Disallow: /api/',
+    '',
+    `Host: ${host}`,
     `Sitemap: ${siteUrl}/sitemap.xml`,
     ''
   ].join('\n')

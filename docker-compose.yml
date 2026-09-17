@@ -33,6 +33,8 @@ services:
       HOST: 0.0.0.0
       PORT: 3000
       INDEXER_PROJECT_DIR: /work/project
+      # Keep admin "docker compose run indexer" on this stack, not a new "project_*" stack.
+      COMPOSE_PROJECT_NAME: fitnessgirl-meet
     depends_on:
       db:
         condition: service_healthy
