@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { seoTopics } from '../data/seo-topics'
+
 type Profile = {
   id: string
   displayName: string
@@ -99,31 +101,80 @@ onBeforeUnmount(() => {
   observer = null
 })
 
+const catalogFaqs = [
+  {
+    question: 'Где смотреть анкеты спортивных девушек в Москве?',
+    answer:
+      'В каталоге Fitnessgirl Meet: лента анкет по Москве с фото и переходом в оригинальный профиль VK.'
+  },
+  {
+    question: 'Есть ли анкеты фитоняшек и девушек из фитнеса?',
+    answer:
+      'Да. В отбор попадают профили с признаками фитнеса, спорта и активного поиска — в том числе то, что в поиске называют фитоняшками.'
+  },
+  {
+    question: 'Это сайт знакомств со спортивными девушками?',
+    answer:
+      'По сути да: каталог для знакомств. Переписка идёт в VK после перехода по ссылке, а не во внутреннем чате.'
+  },
+  {
+    question: 'Где познакомиться со спортивной девушкой в Москве онлайн?',
+    answer:
+      'Откройте каталог, выберите анкету по фото и описанию, перейдите в VK и напишите короткое сообщение.'
+  },
+  {
+    question: 'Анкеты только из центра Москвы?',
+    answer:
+      'Нет. В базе девушки из разных округов Москвы (в том числе САО, ЦАО, ЮАО и других), если в профиле указан город Москва.'
+  },
+  {
+    question: 'Нужна ли подписка, чтобы видеть анкеты?',
+    answer:
+      'Часть каталога доступна в превью. Полная лента и ссылки на VK открываются после подписки.'
+  }
+]
+
 usePageSeo({
   title: 'Анкеты спортивных девушек в Москве',
   description:
-    'Лента анкет девушек из Москвы: фитнес, спорт и активный поиск. Смотрите карточки и открывайте профили VK.',
+    'Каталог анкет спортивных девушек, фитоняшек и девушек из фитнеса в Москве. Фото, город, переход в профиль VK для знакомств.',
   path: '/catalog'
 })
 
-useJsonLd({
-  '@context': 'https://schema.org',
-  '@type': 'CollectionPage',
-  name: 'Анкеты · Москва — Fitnessgirl Meet',
-  description: 'Каталог анкет для знакомств со спортивными девушками в Москве.',
-  isPartOf: {
-    '@type': 'WebSite',
-    name: 'Fitnessgirl Meet'
+useJsonLd([
+  {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: 'Анкеты спортивных девушек в Москве — Fitnessgirl Meet',
+    description:
+      'Каталог анкет для знакомств со спортивными девушками, фитоняшками и спортсменками в Москве.',
+    isPartOf: {
+      '@type': 'WebSite',
+      name: 'Fitnessgirl Meet'
+    }
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: catalogFaqs.map((f) => ({
+      '@type': 'Question',
+      name: f.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: f.answer
+      }
+    }))
   }
-})
+])
 </script>
 
 <template>
   <section class="section">
     <div class="container">
-      <h1>Анкеты · Москва</h1>
+      <h1>Анкеты спортивных девушек в Москве</h1>
       <p class="lead">
-        Отбор по публичным полям VK: фото, возраст, город, признаки спорта и активного поиска.
+        Фитоняшки, девушки из фитнеса и спортсменки: отбор по публичным полям VK — фото, возраст,
+        город Москва, признаки спорта и активного поиска.
         <template v-if="total"> Всего в базе: {{ total }}.</template>
       </p>
 
@@ -182,6 +233,40 @@ useJsonLd({
         Пока пусто. Запустите индексатор:
         <code>npm run index:daily</code>
       </p>
+
+      <section class="seo-hub" aria-labelledby="catalog-seo-title">
+        <h2 id="catalog-seo-title">Знакомства со спортивными девушками в Москве</h2>
+        <p>
+          Каталог Fitnessgirl Meet — это лента анкет спортивных девушек, фитоняшек и девушек из
+          фитнеса в Москве. Мы опираемся на публичные профили VK: фото, возраст, город и признаки
+          интереса к спорту или ЗОЖ. Дальше вы сами переходите в профиль и пишете в VK.
+        </p>
+        <p>
+          Здесь удобно искать не только «анкеты спортивных девушек в Москве», но и смежные запросы:
+          знакомства со спортсменками, стройными девушками, девушками с ухоженной спортивной фигурой.
+          В подборке встречаются анкеты из разных округов Москвы — без отдельного фильтра по САО или
+          ЦАО, зато с живыми карточками и фото.
+        </p>
+        <p>
+          Если нужен сайт знакомств со спортивными девушками в Москве без свайпов и внутреннего чата —
+          начните с этой ленты, оформите доступ к полному каталогу и выбирайте, кому написать.
+        </p>
+
+        <h3 class="seo-hub__sub">Темы каталога</h3>
+        <ul class="seo-hub__links">
+          <li v-for="t in seoTopics" :key="t.slug">
+            <NuxtLink :to="`/topics/${t.slug}`">{{ t.h1 }}</NuxtLink>
+          </li>
+        </ul>
+
+        <h3 class="seo-hub__sub">Частые вопросы</h3>
+        <div class="seo-faq">
+          <details v-for="(f, i) in catalogFaqs" :key="i" class="seo-faq__item">
+            <summary>{{ f.question }}</summary>
+            <p>{{ f.answer }}</p>
+          </details>
+        </div>
+      </section>
     </div>
   </section>
 </template>
@@ -205,5 +290,56 @@ useJsonLd({
 
 .empty-hint {
   margin-top: 1rem;
+}
+
+.seo-hub {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--line);
+  max-width: 42rem;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.seo-hub h2 {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  margin: 0 0 1rem;
+}
+
+.seo-hub__sub {
+  color: var(--ink);
+  font-size: 1.05rem;
+  margin: 1.75rem 0 0.75rem;
+}
+
+.seo-hub__links {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.seo-hub__links a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.seo-faq__item {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.55rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.seo-faq__item summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.seo-faq__item p {
+  margin: 0.65rem 0 0;
 }
 </style>
