@@ -45,7 +45,7 @@ export default defineNuxtConfig({
     paymentPhone: '',
     paymentHolder: '',
     paymentBank: 'Сбербанк',
-    subscriptionPriceRub: 990,
+    subscriptionPriceRub: 450,
     subscriptionDays: 30,
     telegramBotToken: '',
     telegramAdminChatId: '',

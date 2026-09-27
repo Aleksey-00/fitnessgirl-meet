@@ -137,7 +137,7 @@ watch(
           <dt>Банк получателя</dt>
           <dd>{{ info?.bank || 'Сбербанк' }}</dd>
           <dt>Сумма</dt>
-          <dd>{{ info?.priceRub || 990 }} ₽</dd>
+          <dd>{{ info?.priceRub || 450 }} ₽</dd>
           <dt>Срок</dt>
           <dd>{{ info?.days || 30 }} дней</dd>
           <dt>Получатель</dt>

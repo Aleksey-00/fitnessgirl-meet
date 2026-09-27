@@ -51,7 +51,7 @@ services:
       - key: PAYMENT_HOLDER
         sync: false
       - key: SUBSCRIPTION_PRICE_RUB
-        value: "990"
+        value: "450"
       - key: SUBSCRIPTION_DAYS
         value: "30"
       - key: TELEGRAM_BOT_TOKEN

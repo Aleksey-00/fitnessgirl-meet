@@ -23,7 +23,7 @@ export function getPaymentRuntime() {
     priceRub:
       envNum(0, 'SUBSCRIPTION_PRICE_RUB', 'NUXT_SUBSCRIPTION_PRICE_RUB') ||
       Number(config.subscriptionPriceRub) ||
-      990,
+      450,
     days:
       envNum(0, 'SUBSCRIPTION_DAYS', 'NUXT_SUBSCRIPTION_DAYS') ||
       Number(config.subscriptionDays) ||
