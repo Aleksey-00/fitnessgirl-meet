@@ -1,5 +1,5 @@
 export type AuthMe = {
-  user: { id: string; email: string; role: string } | null
+  user: { id: string; email: string; role: string; gender?: 'male' | 'female' } | null
   subscribed: boolean
   pendingClaim?: boolean
 }

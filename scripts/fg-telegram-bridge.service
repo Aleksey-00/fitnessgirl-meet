@@ -1,16 +1,27 @@
 [Unit]
 Description=Fitnessgirl Meet — home Telegram bridge (notify + approve)
-After=network-online.target docker.service
+After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/azorabekov-a/Desktop/projects/fitnessgirl-meet
-ExecStart=/home/azorabekov-a/Desktop/projects/fitnessgirl-meet/scripts/run-home-telegram.sh
+WorkingDirectory=/mnt/c/projects/fitnessgirl-meet
+ExecStartPre=/bin/bash -c 'until docker info >/dev/null 2>&1; do sleep 2; done'
+ExecStartPre=-/usr/bin/sed -i 's/\r$//' /mnt/c/projects/fitnessgirl-meet/scripts/run-home-telegram.sh
+ExecStart=/bin/bash /mnt/c/projects/fitnessgirl-meet/scripts/run-home-telegram.sh
 Restart=always
 RestartSec=15
-# Do not buffer script output
+TimeoutStartSec=300
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
 Environment=PYTHONUNBUFFERED=1
+Environment=FG_SSH_KEY=/home/aazor/.ssh/id_rsa
+Environment=FG_VPS=root@134.0.113.50
+Environment=HOME=/home/aazor
+Environment=USER=aazor
+StandardOutput=append:/home/aazor/fg-logs/telegram-bridge.log
+StandardError=append:/home/aazor/fg-logs/telegram-bridge.log
 
 [Install]
 WantedBy=default.target

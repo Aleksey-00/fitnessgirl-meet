@@ -27,21 +27,20 @@ const MODEL_DIR = path.join(ROOT, 'models', 'face-api')
 const MIN_APPARENT_AGE = Number(process.env.PHOTO_MIN_APPARENT_AGE || 23)
 const MIN_FACE_SCORE = Number(process.env.PHOTO_MIN_FACE_SCORE || 0.72)
 const MIN_FEMALE_PROB = Number(process.env.PHOTO_MIN_FEMALE_PROB || 0.62)
+const MIN_MALE_PROB = Number(process.env.PHOTO_MIN_MALE_PROB || 0.62)
 
-/** Profiles that must not appear in the adult women catalog. */
+/** Profiles that must not appear in any gender catalog. */
 export function shouldHideForPhotoAge(status: PhotoAgeEstimate['status']) {
-  return (
-    status === 'underage' ||
-    status === 'unclear' ||
-    status === 'male' ||
-    status === 'nonhuman' ||
-    status === 'error'
-  )
+  // status 'ok' = clear adult face (female or male). Legacy 'male' status still hides until re-check.
+  return status !== 'ok'
 }
 
-/** Only clear adult female real-photo faces are allowed into the catalog DB. */
-export function isCatalogFacePass(status: PhotoAgeEstimate['status']) {
-  return status === 'ok'
+/** Clear adult face of the expected gender. */
+export function isCatalogFacePass(
+  face: { status: PhotoAgeEstimate['status']; gender?: string | null },
+  expected: 'female' | 'male'
+) {
+  return face.status === 'ok' && face.gender === expected
 }
 
 export function photoAgeCheckEnabled() {
@@ -255,15 +254,15 @@ export async function estimateAgeFromImageBuffer(buffer: Buffer): Promise<PhotoA
         }
       }
 
-      if (genderRaw === 'male' && genderProb >= 0.55) {
+      if (genderRaw === 'male' && genderProb >= MIN_MALE_PROB) {
         return {
           estimatedAge,
           looksUnderage: false,
-          confidence: Math.min(1, genderProb),
-          status: 'male',
+          confidence: Math.min(1, Math.max(faceScore, genderProb)),
+          status: 'ok',
           gender: 'male',
           genderConfidence: genderProb,
-          detail: `male face conf=${genderProb.toFixed(2)} face=${faceScore.toFixed(2)}`
+          detail: `male age≈${estimatedAge} gender=${genderProb.toFixed(2)} ${realism.detail}`
         }
       }
 

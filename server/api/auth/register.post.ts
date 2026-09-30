@@ -3,7 +3,8 @@ import { z } from 'zod'
 const bodySchema = z.object({
   email: z.string().email(),
   // Client sends SHA-256 hex (or legacy plaintext min 8 during transition)
-  password: z.union([z.string().regex(/^[a-f0-9]{64}$/i), z.string().min(8)])
+  password: z.union([z.string().regex(/^[a-f0-9]{64}$/i), z.string().min(8)]),
+  gender: z.enum(['male', 'female'])
 })
 
 export default defineEventHandler(async (event) => {
@@ -22,9 +23,14 @@ export default defineEventHandler(async (event) => {
   const passwordHash = await hashPassword(parsed.data.password)
 
   const user = await prisma.user.create({
-    data: { email, passwordHash, role }
+    data: {
+      email,
+      passwordHash,
+      role,
+      gender: parsed.data.gender
+    }
   })
 
   setUserSession(event, { id: user.id, email: user.email, role: user.role })
-  return { id: user.id, email: user.email, role: user.role }
+  return { id: user.id, email: user.email, role: user.role, gender: user.gender }
 })

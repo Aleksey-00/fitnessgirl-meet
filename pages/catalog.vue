@@ -13,12 +13,32 @@ type Profile = {
 
 type ProfilesResponse = {
   subscribed: boolean
+  catalogGender?: 'female' | 'male'
   profiles: Profile[]
   hasMore: boolean
   nextCursor: string | null
   lockedCount?: number
   total?: number
 }
+
+const route = useRoute()
+const router = useRouter()
+const { me, ensureLoaded } = useAuth()
+await ensureLoaded()
+
+function parseGender(raw: unknown): 'female' | 'male' | null {
+  if (raw === 'female' || raw === 'male') return raw
+  return null
+}
+
+/** Default: opposite of viewer (♂→♀, ♀→♂). Guests → women. */
+function defaultCatalogGender(): 'female' | 'male' {
+  return me.value?.user?.gender === 'female' ? 'male' : 'female'
+}
+
+const catalogGender = ref<'female' | 'male'>(
+  parseGender(route.query.gender) || defaultCatalogGender()
+)
 
 const {
   data: firstPage,
@@ -28,7 +48,9 @@ const {
   'catalog-first-page',
   () => {
     const requestFetch = useRequestFetch()
-    return requestFetch<ProfilesResponse>('/api/profiles', { query: { limit: 24 } })
+    return requestFetch<ProfilesResponse>('/api/profiles', {
+      query: { limit: 24, gender: catalogGender.value }
+    })
   },
   { server: true, lazy: false }
 )
@@ -40,14 +62,73 @@ const nextCursor = ref<string | null>(firstPage.value?.nextCursor ?? null)
 const lockedCount = ref(firstPage.value?.lockedCount || 0)
 const total = ref(firstPage.value?.total || 0)
 const loadingMore = ref(false)
+const switching = ref(false)
 const loadError = ref('')
 const bootError = computed(() => {
   if (!firstError.value) return ''
   return (firstError.value as any)?.data?.statusMessage || 'Не удалось загрузить каталог'
 })
 
+watch(firstPage, (page) => {
+  if (!page || switching.value) return
+  profiles.value = [...(page.profiles || [])]
+  subscribed.value = Boolean(page.subscribed)
+  hasMore.value = Boolean(page.hasMore)
+  nextCursor.value = page.nextCursor ?? null
+  lockedCount.value = page.lockedCount || 0
+  total.value = page.total || 0
+})
+
+const showMenCatalog = computed(() => catalogGender.value === 'male')
+
+const catalogTitle = computed(() =>
+  showMenCatalog.value
+    ? 'Парни со спортивным образом жизни — Москва'
+    : 'Девушки со спортивным образом жизни — Москва'
+)
+
+const catalogLead = computed(() =>
+  showMenCatalog.value
+    ? 'Подборка парней из фитнеса и спорта: публичные профили VK с Москвой, фото, возрастом и явным интересом к спорту — без интим-намёков. Общение в VK.'
+    : 'Подборка девушек из фитнеса и спорта: публичные профили VK с Москвой, фото, возрастом и явным интересом к спорту — без интим-намёков. Общение в VK.'
+)
+
 const sentinel = ref<HTMLElement | null>(null)
 const hydrated = ref(false)
+
+function applyPage(res: ProfilesResponse) {
+  profiles.value = [...(res.profiles || [])]
+  subscribed.value = Boolean(res.subscribed)
+  hasMore.value = Boolean(res.hasMore)
+  nextCursor.value = res.nextCursor ?? null
+  lockedCount.value = res.lockedCount || 0
+  total.value = res.total || 0
+  if (res.catalogGender === 'female' || res.catalogGender === 'male') {
+    catalogGender.value = res.catalogGender
+  }
+}
+
+async function setCatalogGender(next: 'female' | 'male') {
+  if (catalogGender.value === next || switching.value) return
+  switching.value = true
+  loadError.value = ''
+  catalogGender.value = next
+  profiles.value = []
+  try {
+    await router.replace({ query: { ...route.query, gender: next } })
+    const requestFetch = useRequestFetch()
+    const res = await requestFetch<ProfilesResponse>('/api/profiles', {
+      query: { limit: 24, gender: next }
+    })
+    applyPage(res)
+    // Keep useAsyncData cache in sync for further watches / SSR hydration edges.
+    firstPage.value = res
+  } catch (e: any) {
+    loadError.value = e?.data?.statusMessage || 'Не удалось переключить подборку'
+  } finally {
+    switching.value = false
+  }
+}
 
 async function loadMore() {
   if (!hydrated.value) return
@@ -57,9 +138,10 @@ async function loadMore() {
   try {
     const requestFetch = useRequestFetch()
     const res = await requestFetch<ProfilesResponse>('/api/profiles', {
-      query: { limit: 24, cursor: nextCursor.value }
+      query: { limit: 24, cursor: nextCursor.value, gender: catalogGender.value }
     })
     subscribed.value = res.subscribed
+    if (res.catalogGender) catalogGender.value = res.catalogGender
     hasMore.value = res.hasMore
     nextCursor.value = res.nextCursor
     lockedCount.value = res.lockedCount || 0
@@ -103,41 +185,39 @@ onBeforeUnmount(() => {
 
 const catalogFaqs = [
   {
-    question: 'Где смотреть анкеты спортивных девушек в Москве?',
+    question: 'Что это за подборка?',
     answer:
-      'В каталоге Fitnessgirl Meet: лента анкет по Москве с фото и переходом в оригинальный профиль VK.'
+      'Fitnessgirl Meet показывает людей со спортивным образом жизни в Москве: друзья, единомышленники и те, с кем совпадает ритм жизни. Переписка — в VK.'
   },
   {
-    question: 'Есть ли анкеты фитоняшек и девушек из фитнеса?',
+    question: 'Это сайт знакомств?',
     answer:
-      'Да. В отбор попадают профили с признаками фитнеса, спорта и активного поиска — в том числе то, что в поиске называют фитоняшками.'
+      'Нет. Это сервис подборки по спорту и ЗОЖ. Близкие отношения могут сложиться, но продукт про сообщество и совпадение образа жизни, не про «чат знакомств».'
   },
   {
-    question: 'Это сайт знакомств со спортивными девушками?',
+    question: 'Как отсекаете нежелательный контент?',
     answer:
-      'По сути да: каталог для знакомств. Переписка идёт в VK после перехода по ссылке, а не во внутреннем чате.'
+      'В подборку не попадают профили без спортивного сигнала и с признаками интим- или эскорт-услуг в публичном тексте. Есть opt-out.'
   },
   {
-    question: 'Где познакомиться со спортивной девушкой в Москве онлайн?',
+    question: 'Только Москва?',
     answer:
-      'Откройте каталог, выберите анкету по фото и описанию, перейдите в VK и напишите короткое сообщение.'
+      'Да, в базе профили с городом Москва в VK (разные округа), если город указан как Москва.'
   },
   {
-    question: 'Анкеты только из центра Москвы?',
+    question: 'Нужна ли подписка?',
     answer:
-      'Нет. В базе девушки из разных округов Москвы (в том числе САО, ЦАО, ЮАО и других), если в профиле указан город Москва.'
-  },
-  {
-    question: 'Нужна ли подписка, чтобы видеть анкеты?',
-    answer:
-      'Часть каталога доступна в превью. Полная лента и ссылки на VK открываются после подписки.'
+      'Часть подборки доступна в превью. Полная лента и ссылки на VK — после оформления доступа.'
   }
 ]
 
 usePageSeo({
-  title: 'Анкеты спортивных девушек в Москве',
-  description:
-    'Каталог анкет спортивных девушек, фитоняшек и девушек из фитнеса в Москве. Фото, город, переход в профиль VK для знакомств.',
+  title: showMenCatalog.value
+    ? 'Парни со спортивным образом жизни в Москве'
+    : 'Девушки со спортивным образом жизни в Москве',
+  description: showMenCatalog.value
+    ? 'Подборка парней из фитнеса и спорта в Москве. Друзья и единомышленники через публичные профили VK.'
+    : 'Подборка девушек из фитнеса и спорта в Москве. Друзья и единомышленники через публичные профили VK.',
   path: '/catalog'
 })
 
@@ -145,9 +225,9 @@ useJsonLd([
   {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
-    name: 'Анкеты спортивных девушек в Москве — Fitnessgirl Meet',
+    name: 'Люди спорта в Москве — Fitnessgirl Meet',
     description:
-      'Каталог анкет для знакомств со спортивными девушками, фитоняшками и спортсменками в Москве.',
+      'Подборка людей со спортивным образом жизни в Москве: друзья, единомышленники, совпадения по ритму жизни.',
     isPartOf: {
       '@type': 'WebSite',
       name: 'Fitnessgirl Meet'
@@ -171,16 +251,36 @@ useJsonLd([
 <template>
   <section class="section">
     <div class="container">
-      <h1>Анкеты спортивных девушек в Москве</h1>
+      <h1>{{ catalogTitle }}</h1>
       <p class="lead">
-        Фитоняшки, девушки из фитнеса и спортсменки: отбор по публичным полям VK — фото, возраст,
-        город Москва, признаки спорта и активного поиска.
+        {{ catalogLead }}
         <template v-if="total"> Всего в базе: {{ total }}.</template>
       </p>
 
+      <div class="catalog-filter" role="group" aria-label="Кого показывать">
+        <button
+          type="button"
+          class="catalog-filter__btn"
+          :class="{ 'is-active': catalogGender === 'female' }"
+          :disabled="switching"
+          @click="setCatalogGender('female')"
+        >
+          Девушки
+        </button>
+        <button
+          type="button"
+          class="catalog-filter__btn"
+          :class="{ 'is-active': catalogGender === 'male' }"
+          :disabled="switching"
+          @click="setCatalogGender('male')"
+        >
+          Парни
+        </button>
+      </div>
+
       <p v-if="bootError" class="form error">{{ bootError }}</p>
 
-      <div v-else-if="booting && !profiles.length" class="lead">Загрузка…</div>
+      <div v-else-if="(booting || switching) && !profiles.length" class="lead">Загрузка…</div>
 
       <div v-else class="grid">
         <article
@@ -229,30 +329,28 @@ useJsonLd([
         <div ref="sentinel" class="feed-sentinel" aria-hidden="true" />
       </div>
 
-      <p v-if="!bootError && !booting && !profiles.length" class="lead empty-hint">
-        Пока пусто. Запустите индексатор:
-        <code>npm run index:daily</code>
+      <p v-if="!bootError && !booting && !switching && !profiles.length" class="lead empty-hint">
+        Пока пусто в этой подборке.
+        <template v-if="catalogGender === 'male'"> Мужские анкеты появятся после индексации.</template>
       </p>
 
       <section class="seo-hub" aria-labelledby="catalog-seo-title">
-        <h2 id="catalog-seo-title">Знакомства со спортивными девушками в Москве</h2>
+        <h2 id="catalog-seo-title">Люди спорта в Москве</h2>
         <p>
-          Каталог Fitnessgirl Meet — это лента анкет спортивных девушек, фитоняшек и девушек из
-          фитнеса в Москве. Мы опираемся на публичные профили VK: фото, возраст, город и признаки
-          интереса к спорту или ЗОЖ. Дальше вы сами переходите в профиль и пишете в VK.
+          Fitnessgirl Meet — подборка публичных профилей VK, где читается интерес к фитнесу, спорту и
+          ЗОЖ. Задача сервиса — помочь найти друзей и единомышленников с похожим образом жизни.
+          Близкие отношения, если сложатся, — уже ваш личный выбор вне сайта.
         </p>
         <p>
-          Здесь удобно искать не только «анкеты спортивных девушек в Москве», но и смежные запросы:
-          знакомства со спортсменками, стройными девушками, девушками с ухоженной спортивной фигурой.
-          В подборке встречаются анкеты из разных округов Москвы — без отдельного фильтра по САО или
-          ЦАО, зато с живыми карточками и фото.
+          Мы ужесточаем отбор: нужен явный спортивный сигнал, живое фото, возраст 18–35 и отсутствие
+          признаков интим- или эскорт-услуг в публичном тексте. Переписка только в VK.
         </p>
         <p>
-          Если нужен сайт знакомств со спортивными девушками в Москве без свайпов и внутреннего чата —
-          начните с этой ленты, оформите доступ к полному каталогу и выбирайте, кому написать.
+          Фитнес-студиям и клубам — отдельная страница
+          <NuxtLink to="/partners">партнёрства</NuxtLink>.
         </p>
 
-        <h3 class="seo-hub__sub">Темы каталога</h3>
+        <h3 class="seo-hub__sub">Темы</h3>
         <ul class="seo-hub__links">
           <li v-for="t in seoTopics" :key="t.slug">
             <NuxtLink :to="`/topics/${t.slug}`">{{ t.h1 }}</NuxtLink>
@@ -272,6 +370,44 @@ useJsonLd([
 </template>
 
 <style scoped>
+.catalog-filter {
+  display: inline-flex;
+  gap: 0.35rem;
+  margin: 0 0 1.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.catalog-filter__btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.catalog-filter__btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.catalog-filter__btn.is-active {
+  background: var(--accent);
+  color: #0c1412;
+}
+
+.catalog-filter__btn:not(.is-active):hover {
+  color: var(--ink);
+}
+
 .feed-status {
   margin-top: 1.5rem;
   text-align: center;

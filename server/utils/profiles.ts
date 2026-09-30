@@ -1,5 +1,7 @@
 import { prisma } from './prisma'
 
+export type CatalogGender = 'female' | 'male'
+
 export function serializeProfile(profile: {
   id: string
   vkId: bigint
@@ -50,28 +52,53 @@ export function decodeCursor(raw?: string | null): ProfileCursor | null {
   }
 }
 
+/** Opposite catalog for a viewer gender. Guests / unknown → women. */
+export function catalogGenderForViewer(viewerGender?: string | null): CatalogGender {
+  return viewerGender === 'female' ? 'male' : 'female'
+}
+
+export function parseCatalogGender(raw?: string | null): CatalogGender | null {
+  if (raw === 'female' || raw === 'male') return raw
+  return null
+}
+
 export async function listVisibleProfilesPage(opts: {
   limit: number
   cursor?: ProfileCursor | null
+  catalogGender?: CatalogGender
 }) {
   const limit = Math.min(Math.max(opts.limit, 1), 48)
   const cursor = opts.cursor
+  const catalogGender = opts.catalogGender || 'female'
 
-  // Catalog: only checked adult female faces that are actively looking
+  const baseAnd = [
+    {
+      signals: {
+        path: ['activelyLooking'],
+        equals: true
+      }
+    },
+    {
+      signals: {
+        path: ['sport'],
+        equals: true
+      }
+    }
+  ]
+
   const ageSafe = {
     isHidden: false,
     age: { gte: 18, lte: 35 },
     photoAgeStatus: 'ok',
-    signals: {
-      path: ['activelyLooking'],
-      equals: true
-    }
-  } as const
+    photoGender: catalogGender,
+    AND: baseAnd
+  }
 
   const where = cursor
     ? {
         ...ageSafe,
         AND: [
+          ...baseAnd,
           {
             OR: [
               { score: { lt: cursor.score } },
@@ -98,5 +125,5 @@ export async function listVisibleProfilesPage(opts: {
 
   const total = await prisma.profile.count({ where: ageSafe })
 
-  return { profiles: page, hasMore, nextCursor, total }
+  return { profiles: page, hasMore, nextCursor, total, catalogGender }
 }

@@ -10,9 +10,9 @@ const pending = ref(false)
 const waitingApproval = ref(Boolean(me.value?.pendingClaim && !me.value?.subscribed))
 
 usePageSeo({
-  title: 'Подписка на каталог анкет',
+  title: 'Доступ к полной подборке',
   description:
-    'Оформите доступ к полной ленте анкет Fitnessgirl Meet: спортивные девушки в Москве и прямые ссылки на VK.',
+    'Оформите доступ к полной ленте Fitnessgirl Meet: люди спорта в Москве и прямые ссылки на VK.',
   path: '/subscribe'
 })
 
@@ -115,8 +115,8 @@ watch(
 
       <div v-if="me?.subscribed" class="panel" style="margin-bottom: 1.25rem">
         <strong style="color: var(--accent)">Подписка активна.</strong>
-        <p style="margin: 0.5rem 0 0; color: var(--muted)">Можно открывать полный каталог и ссылки VK.</p>
-        <NuxtLink class="btn btn-primary" style="margin-top: 1rem" to="/catalog">К анкетам</NuxtLink>
+        <p style="margin: 0.5rem 0 0; color: var(--muted)">Можно открывать полную подборку и ссылки VK.</p>
+        <NuxtLink class="btn btn-primary" style="margin-top: 1rem" to="/catalog">К подборке</NuxtLink>
       </div>
 
       <div v-else-if="waitingApproval" class="panel" style="margin-bottom: 1.25rem">

@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
     { loc: '/catalog', priority: '0.9', changefreq: 'hourly' },
     { loc: '/subscribe', priority: '0.8', changefreq: 'weekly' },
     { loc: '/disclaimer', priority: '0.4', changefreq: 'monthly' },
+    { loc: '/partners', priority: '0.7', changefreq: 'monthly' },
     { loc: '/opt-out', priority: '0.3', changefreq: 'monthly' },
     ...seoTopics.map((t) => ({
       loc: `/topics/${t.slug}`,

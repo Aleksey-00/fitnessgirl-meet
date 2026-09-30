@@ -79,8 +79,9 @@ watch(menuOpen, (open) => {
         />
 
         <nav id="site-nav" class="nav" :class="{ 'nav--open': menuOpen }">
-          <NuxtLink to="/catalog" @click="closeMenu">Анкеты</NuxtLink>
+          <NuxtLink to="/catalog" @click="closeMenu">Подборка</NuxtLink>
           <NuxtLink to="/subscribe" @click="closeMenu">Подписка</NuxtLink>
+          <NuxtLink to="/partners" @click="closeMenu">Студиям</NuxtLink>
           <NuxtLink to="/disclaimer" @click="closeMenu">Дисклеймер</NuxtLink>
           <NuxtLink to="/opt-out" @click="closeMenu">Opt-out</NuxtLink>
           <template v-if="me?.user">
@@ -102,9 +103,10 @@ watch(menuOpen, (open) => {
 
     <footer class="site-footer">
       <div class="container">
-        Публичные профили VK через API ·
+        Публичные профили VK · спорт и ЗОЖ ·
+        <NuxtLink to="/partners">студиям</NuxtLink> ·
         <NuxtLink to="/disclaimer">дисклеймер</NuxtLink> ·
-        <NuxtLink to="/opt-out">удалить анкету</NuxtLink>
+        <NuxtLink to="/opt-out">скрыть профиль</NuxtLink>
       </div>
     </footer>
   </div>

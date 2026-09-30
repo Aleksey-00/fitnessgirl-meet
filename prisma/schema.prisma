@@ -12,6 +12,11 @@ enum Role {
   admin
 }
 
+enum Gender {
+  male
+  female
+}
+
 enum ClaimStatus {
   pending
   approved
@@ -28,6 +33,8 @@ model User {
   id           String         @id @default(cuid())
   email        String         @unique
   passwordHash String
+  /** Viewer gender: male → women catalog, female → men catalog */
+  gender       Gender         @default(male)
   role         Role           @default(user)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
@@ -85,6 +92,7 @@ model Profile {
   updatedAt            DateTime  @updatedAt
 
   @@index([isHidden, score])
+  @@index([isHidden, photoGender, score])
   @@index([photoHash])
   @@index([photoAgeStatus])
 }

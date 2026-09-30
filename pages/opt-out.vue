@@ -6,8 +6,8 @@ const error = ref('')
 const pending = ref(false)
 
 usePageSeo({
-  title: 'Удалить анкету из каталога',
-  description: 'Запросите скрытие своей анкеты из Fitnessgirl Meet по VK id или ссылке на профиль.',
+  title: 'Скрыть профиль из подборки',
+  description: 'Запросите скрытие своего профиля из Fitnessgirl Meet по VK id или ссылке.',
   path: '/opt-out'
 })
 

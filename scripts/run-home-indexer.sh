@@ -128,14 +128,31 @@ echo -n "==> public IP (must match VK token bind): "; curl -4 -sS --max-time 10 
 
 echo "==> VK token check"
 python3 -c '
-import json, pathlib, urllib.parse, urllib.request, sys
+import json, pathlib, urllib.parse, urllib.request, sys, time
 token=pathlib.Path("'"$RUN_DIR"'/fg-vk.token").read_text().strip()
 q=urllib.parse.urlencode({"v":"5.199","access_token":token})
-data=json.load(urllib.request.urlopen("https://api.vk.com/method/users.get?"+q, timeout=20))
-if "error" in data:
-  print(data["error"].get("error_msg", data))
+last=None
+for attempt in range(1, 6):
+  data=json.load(urllib.request.urlopen("https://api.vk.com/method/users.get?"+q, timeout=20))
+  if "error" not in data:
+    print("vk_ok")
+    sys.exit(0)
+  err=data["error"]
+  msg=err.get("error_msg", str(err))
+  code=err.get("error_code")
+  last=msg
+  # Flood control => token is accepted; wait and retry, or proceed after last attempt
+  if code == 9 or "Flood control" in msg:
+    print(f"flood_wait attempt={attempt} {msg}")
+    if attempt == 5:
+      print("vk_ok_flood")
+      sys.exit(0)
+    time.sleep(15 * attempt)
+    continue
+  print(msg)
   sys.exit(2)
-print("vk_ok")
+print(last or "vk token check failed")
+sys.exit(2)
 '
 
 echo "==> start indexer ${MODE_ARGS[*]}"
@@ -144,7 +161,9 @@ docker run --rm --network=host \
   -e "DATABASE_URL=postgresql://${PGUSER}:${PW}@127.0.0.1:${LOCAL_PORT}/${PGDB}?schema=public" \
   -e VK_ACCESS_TOKEN \
   -e "VK_DAILY_LIMIT=${DAILY_LIMIT}" \
-  -e VK_REQUEST_DELAY_MS=1200 \
+  -e "VK_REQUEST_DELAY_MS=${VK_REQUEST_DELAY_MS:-3000}" \
+  -v "$ROOT/scripts/index-vk.ts:/app/scripts/index-vk.ts:ro" \
+  -v "$ROOT/server/utils:/app/server/utils:ro" \
   fitnessgirl-meet-indexer:latest \
   npx tsx scripts/index-vk.ts "${MODE_ARGS[@]}"
 
