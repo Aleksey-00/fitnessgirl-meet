@@ -412,14 +412,22 @@ async function indexDaily() {
     maleQuota = Math.max(0, dailyLimit - femaleQuota)
   }
 
-  const day = Math.floor(Date.now() / 86_400_000)
+  // VK_INDEX_SALT shifts name/age shards so same-day re-runs find new people.
+  const daySalt = Number(process.env.VK_INDEX_SALT || 0)
+  const day = Math.floor(Date.now() / 86_400_000) + (Number.isFinite(daySalt) ? daySalt : 0)
   const ageSpan = Math.max(1, ageTo - ageFrom + 1)
   const focusAge = ageFrom + (day % ageSpan)
   const ages = [
     focusAge,
     focusAge + 1 > ageTo ? ageFrom : focusAge + 1,
-    focusAge - 1 < ageFrom ? ageTo : focusAge - 1
+    focusAge - 1 < ageFrom ? ageTo : focusAge - 1,
+    focusAge + 2 > ageTo ? ageFrom + ((focusAge + 2 - ageFrom) % ageSpan) : focusAge + 2,
+    focusAge + 3 > ageTo ? ageFrom + ((focusAge + 3 - ageFrom) % ageSpan) : focusAge + 3
   ]
+  const searchOffsets = String(process.env.VK_SEARCH_OFFSETS || '0,100')
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isFinite(n) && n >= 0)
 
   const fields = 'sex,photo_200,photo_max,bdate,city,relation,status,interests,activities,about,personal'
   let created = 0
@@ -430,7 +438,7 @@ async function indexDaily() {
   let createdMale = 0
 
   console.log(
-    `Daily index start: target=${dailyLimit} sex=${sexFilter} (♀${femaleQuota}/♂${maleQuota}), focusAge=${focusAge}, existing=${existingIds.size} visible♀=${visibleFemale} visible♂=${visibleMale}`
+    `Daily index start: target=${dailyLimit} sex=${sexFilter} (♀${femaleQuota}/♂${maleQuota}), focusAge=${focusAge}, salt=${daySalt}, offsets=${searchOffsets.join('|')}, existing=${existingIds.size} visible♀=${visibleFemale} visible♂=${visibleMale}`
   )
 
   const sexes: Array<{ sex: 1 | 2; quota: number; names: string[] }> = []
@@ -469,61 +477,63 @@ async function indexDaily() {
     outer: for (const age of ages) {
       for (const q of lane.names) {
         for (const status of [6, undefined] as Array<number | undefined>) {
-          if (laneCreated >= lane.quota || created >= dailyLimit) break outer
-          if (laneFloodSkips >= 6) {
-            console.warn(`lane sex=${lane.sex} abort after ${laneFloodSkips} flood skips`)
-            break outer
-          }
-          await coolDownIfFlooding()
-          console.log(
-            `search sex=${lane.sex} age=${age} q="${q || '*'}" status=${status ?? 'any'} lane=${laneCreated}/${lane.quota}`
-          )
-          let chunk: VkUser[] = []
-          try {
-            chunk = await searchChunk(token, {
-              q: q || undefined,
-              sex: lane.sex,
-              city: cityId,
-              age_from: age,
-              age_to: age,
-              has_photo: 1,
-              status,
-              count: 100,
-              offset: 0,
-              fields
-            })
-          } catch (e) {
-            const msg = String((e as Error)?.message || e)
-            const flood = msg.includes('Flood') || msg.includes('API 9') || msg.includes('API 6')
-            console.warn('shard failed, skip:', e)
-            if (flood) {
-              laneFloodSkips += 1
-              await sleep(20_000)
-            } else {
-              await sleep(5_000)
-            }
-            continue
-          }
-          for (const user of chunk) {
+          for (const offset of searchOffsets) {
             if (laneCreated >= lane.quota || created >= dailyLimit) break outer
-            if (existingIds.has(String(user.id))) {
-              const r = await upsertUser(user, threshold, existingIds, lane.sex)
-              if (r === 'updated') updated += 1
-              else if (r === 'rejected') rejected += 1
-              else if (r === 'skipped') skipped += 1
+            if (laneFloodSkips >= 6) {
+              console.warn(`lane sex=${lane.sex} abort after ${laneFloodSkips} flood skips`)
+              break outer
+            }
+            await coolDownIfFlooding()
+            console.log(
+              `search sex=${lane.sex} age=${age} q="${q || '*'}" status=${status ?? 'any'} offset=${offset} lane=${laneCreated}/${lane.quota}`
+            )
+            let chunk: VkUser[] = []
+            try {
+              chunk = await searchChunk(token, {
+                q: q || undefined,
+                sex: lane.sex,
+                city: cityId,
+                age_from: age,
+                age_to: age,
+                has_photo: 1,
+                status,
+                count: 100,
+                offset,
+                fields
+              })
+            } catch (e) {
+              const msg = String((e as Error)?.message || e)
+              const flood = msg.includes('Flood') || msg.includes('API 9') || msg.includes('API 6')
+              console.warn('shard failed, skip:', e)
+              if (flood) {
+                laneFloodSkips += 1
+                await sleep(20_000)
+              } else {
+                await sleep(5_000)
+              }
               continue
             }
-            const r = await upsertUser(user, threshold, existingIds, lane.sex)
-            if (r === 'created') {
-              created += 1
-              laneCreated += 1
-              if (lane.sex === 1) createdFemale += 1
-              else createdMale += 1
-            } else if (r === 'updated') updated += 1
-            else if (r === 'rejected') rejected += 1
-            else skipped += 1
+            for (const user of chunk) {
+              if (laneCreated >= lane.quota || created >= dailyLimit) break outer
+              if (existingIds.has(String(user.id))) {
+                const r = await upsertUser(user, threshold, existingIds, lane.sex)
+                if (r === 'updated') updated += 1
+                else if (r === 'rejected') rejected += 1
+                else if (r === 'skipped') skipped += 1
+                continue
+              }
+              const r = await upsertUser(user, threshold, existingIds, lane.sex)
+              if (r === 'created') {
+                created += 1
+                laneCreated += 1
+                if (lane.sex === 1) createdFemale += 1
+                else createdMale += 1
+              } else if (r === 'updated') updated += 1
+              else if (r === 'rejected') rejected += 1
+              else skipped += 1
+            }
+            await sleep(requestDelay)
           }
-          await sleep(requestDelay)
         }
       }
     }
