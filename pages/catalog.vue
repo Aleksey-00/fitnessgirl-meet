@@ -290,7 +290,17 @@ useJsonLd([
           :style="{ animationDelay: `${Math.min(i, 24) * 30}ms` }"
         >
           <div class="profile-card__media">
-            <img v-if="p.photoUrl" :src="p.photoUrl" :alt="p.displayName" loading="lazy" />
+            <NuxtImg
+              v-if="p.photoUrl"
+              :src="p.photoUrl"
+              :alt="p.displayName"
+              width="400"
+              height="500"
+              sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px"
+              :loading="i < 6 ? 'eager' : 'lazy'"
+              :preload="i < 2"
+              decoding="async"
+            />
           </div>
           <div class="profile-card__body">
             <h2 class="profile-card__name">{{ p.displayName }}</h2>

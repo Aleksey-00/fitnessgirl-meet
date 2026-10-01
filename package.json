@@ -28,15 +28,16 @@
     "docker:dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up"
   },
   "dependencies": {
+    "@nuxt/image": "^2.1.0",
     "@prisma/client": "^6.16.1",
     "bcryptjs": "^3.0.2",
+    "long": "^5.2.3",
     "nuxt": "^3.16.2",
     "prisma": "^6.16.1",
     "tsx": "^4.19.3",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0",
-    "zod": "^3.24.2",
-    "long": "^5.2.3"
+    "zod": "^3.24.2"
   },
   "optionalDependencies": {
     "@tensorflow/tfjs-node": "^4.22.0",

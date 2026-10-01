@@ -2,11 +2,33 @@
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: process.env.NODE_ENV !== 'production' },
+  modules: ['@nuxt/image'],
   css: ['~/assets/css/main.css'],
   // Avoid /_nuxt/builds/meta/*.json fetches — they 404 when a CDN/proxy/cache
   // serves a stale tree after deploys and spam the console with hydration noise.
   experimental: {
     appManifest: false
+  },
+  // VK CDN hosts are dynamic (sunN-M.userapi.com), so IPX domain allowlists
+  // cannot cover them reliably. Use NuxtImg for lazy/preload/sizing; keep
+  // original VK URLs (already CDN-served) via the none provider.
+  image: {
+    provider: 'none',
+    quality: 75,
+    domains: [
+      'userapi.com',
+      'vk.com',
+      'vk.ru',
+      'vkuserphoto.ru',
+      'images.unsplash.com'
+    ],
+    screens: {
+      xs: 320,
+      sm: 640,
+      md: 768,
+      lg: 1024,
+      xl: 1280
+    }
   },
   app: {
     head: {
