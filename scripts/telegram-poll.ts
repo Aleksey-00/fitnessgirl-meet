@@ -6,13 +6,35 @@
  */
 import { PrismaClient } from '@prisma/client'
 
-const prisma = new PrismaClient()
+let prisma = new PrismaClient()
 const token = process.env.TELEGRAM_BOT_TOKEN || ''
 const adminChatId = String(process.env.TELEGRAM_ADMIN_CHAT_ID || '')
 
 if (!token || !adminChatId) {
   console.error('TELEGRAM_BOT_TOKEN and TELEGRAM_ADMIN_CHAT_ID required')
   process.exit(1)
+}
+
+function isDbError(err: unknown): boolean {
+  const msg = String(err instanceof Error ? err.message : err)
+  return (
+    msg.includes("Can't reach database server") ||
+    msg.includes('P1001') ||
+    msg.includes('P1017') ||
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('Connection reset') ||
+    msg.includes('Server has closed the connection') ||
+    msg.includes('Timed out fetching a new connection')
+  )
+}
+
+async function resetPrisma() {
+  try {
+    await prisma.$disconnect()
+  } catch {
+    /* ignore */
+  }
+  prisma = new PrismaClient()
 }
 
 async function api(method: string, body?: Record<string, unknown>) {
@@ -192,11 +214,24 @@ async function main() {
   `)
   const del = await api('deleteWebhook', { drop_pending_updates: false })
   console.log('deleteWebhook:', del?.ok ? 'ok' : del)
+  let dbFails = 0
   for (;;) {
     try {
       await loop()
+      dbFails = 0
     } catch (e) {
       console.error('poll error:', e instanceof Error ? e.message : e)
+      if (isDbError(e)) {
+        dbFails += 1
+        console.warn(`db fail ${dbFails}/5 — reconnecting prisma`)
+        await resetPrisma()
+        if (dbFails >= 5) {
+          console.error('too many DB failures; exiting so systemd restarts the tunnel')
+          process.exit(1)
+        }
+      } else {
+        dbFails = 0
+      }
       await new Promise((r) => setTimeout(r, 3000))
     }
   }

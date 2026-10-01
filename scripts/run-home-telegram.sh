@@ -80,16 +80,28 @@ fi
 
 # Docker Desktop's --network=host does NOT share WSL loopback. Bind the tunnel
 # on the WSL eth IP and reach it from a normal bridge-network container.
-WSL_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+WSL_IP="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit }}')"
+if [[ -z "${WSL_IP}" ]]; then
+  WSL_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+fi
+# Prefer non-docker0 address if hostname -I put 172.17.0.1 first.
+if [[ "${WSL_IP}" == "172.17.0.1" ]]; then
+  WSL_IP="$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^172\.17\.' | head -1 || true)"
+fi
 if [[ -z "${WSL_IP}" ]]; then
   echo "cannot detect WSL IP for DB tunnel" >&2
   exit 1
 fi
 
 echo "==> SSH tunnel ${WSL_IP}:${LOCAL_PORT} -> VPS:5432"
+# Drop a stale forward left by a previous crash.
 if ss -ltn "sport = :${LOCAL_PORT}" 2>/dev/null | grep -q LISTEN; then
-  echo "port ${LOCAL_PORT} busy; set FG_LOCAL_PORT to a free port" >&2
-  exit 1
+  echo "    clearing stale listener on :${LOCAL_PORT}"
+  for pid in $(ss -ltnp "sport = :${LOCAL_PORT}" 2>/dev/null | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | sort -u); do
+    kill "$pid" 2>/dev/null || true
+  done
+  pkill -f "ssh -f -N -L .*:${LOCAL_PORT}:127.0.0.1:5432" 2>/dev/null || true
+  sleep 1
 fi
 ssh -f -N -L "${WSL_IP}:${LOCAL_PORT}:127.0.0.1:5432" \
   -F /dev/null -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
@@ -137,7 +149,8 @@ PGDB="$(cat "$RUN_DIR/fg-pg.db")"
 export TELEGRAM_BOT_TOKEN="$(cat "$RUN_DIR/fg-tg.token")"
 export TELEGRAM_ADMIN_CHAT_ID="$(cat "$RUN_DIR/fg-tg.chat")"
 export SUBSCRIPTION_DAYS="$(cat "$RUN_DIR/fg-sub.days")"
-export DATABASE_URL="postgresql://${PGUSER}:${PW}@${WSL_IP}:${LOCAL_PORT}/${PGDB}?schema=public"
+PW_ENC="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$PW")"
+export DATABASE_URL="postgresql://${PGUSER}:${PW_ENC}@${WSL_IP}:${LOCAL_PORT}/${PGDB}?schema=public"
 
 echo -n "==> public IP: "; curl -4 -sS --max-time 10 https://api.ipify.org; echo
 echo "==> Telegram getMe"
