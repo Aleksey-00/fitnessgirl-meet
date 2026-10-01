@@ -37,6 +37,7 @@ cleanup() {
       kill "$pid" 2>/dev/null || true
     done
   fi
+  pkill -f "ssh -f -N -L .*:${LOCAL_PORT}:127.0.0.1:5432" 2>/dev/null || true
   # Keep shared expose up for the other home script / service.
   if [[ "${EXPOSE_CREATED}" == "1" ]]; then
     "${SSH[@]}" "docker rm -f ${EXPOSE_NAME} >/dev/null 2>&1 || true" 2>/dev/null || true
@@ -77,16 +78,35 @@ else
   echo "    reusing existing 127.0.0.1:5432 on VPS"
 fi
 
-echo "==> SSH tunnel 127.0.0.1:${LOCAL_PORT} -> VPS:5432"
+# Docker Desktop's --network=host does NOT share WSL loopback. Bind the tunnel
+# on the WSL eth IP and reach it from a normal bridge-network container.
+WSL_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+if [[ -z "${WSL_IP}" ]]; then
+  echo "cannot detect WSL IP for DB tunnel" >&2
+  exit 1
+fi
+
+echo "==> SSH tunnel ${WSL_IP}:${LOCAL_PORT} -> VPS:5432"
 if ss -ltn "sport = :${LOCAL_PORT}" 2>/dev/null | grep -q LISTEN; then
   echo "port ${LOCAL_PORT} busy; set FG_LOCAL_PORT to a free port" >&2
   exit 1
 fi
-ssh -f -N -L "127.0.0.1:${LOCAL_PORT}:127.0.0.1:5432" \
+ssh -f -N -L "${WSL_IP}:${LOCAL_PORT}:127.0.0.1:5432" \
   -F /dev/null -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes \
-  -o ServerAliveInterval=30 -o ConnectTimeout=20 \
+  -o ServerAliveInterval=30 -o ServerAliveCountMax=4 -o ConnectTimeout=20 \
   -i "$SSH_KEY" "$VPS"
-TUNNEL_PID="$(pgrep -n -f "ssh -f -N -L 127.0.0.1:${LOCAL_PORT}:127.0.0.1:5432" || true)"
+TUNNEL_PID="$(pgrep -n -f "ssh -f -N -L ${WSL_IP}:${LOCAL_PORT}:127.0.0.1:5432" || true)"
+for i in $(seq 1 40); do
+  if ss -ltn "sport = :${LOCAL_PORT}" 2>/dev/null | grep -q LISTEN; then
+    echo "    tunnel ready (pid=${TUNNEL_PID:-?})"
+    break
+  fi
+  if [[ "$i" -eq 40 ]]; then
+    echo "SSH tunnel did not open on :${LOCAL_PORT}" >&2
+    exit 1
+  fi
+  sleep 0.25
+done
 
 echo "==> fetch secrets from VPS .env"
 "${SSH[@]}" "python3 - <<'PY'
@@ -117,7 +137,7 @@ PGDB="$(cat "$RUN_DIR/fg-pg.db")"
 export TELEGRAM_BOT_TOKEN="$(cat "$RUN_DIR/fg-tg.token")"
 export TELEGRAM_ADMIN_CHAT_ID="$(cat "$RUN_DIR/fg-tg.chat")"
 export SUBSCRIPTION_DAYS="$(cat "$RUN_DIR/fg-sub.days")"
-export DATABASE_URL="postgresql://${PGUSER}:${PW}@127.0.0.1:${LOCAL_PORT}/${PGDB}?schema=public"
+export DATABASE_URL="postgresql://${PGUSER}:${PW}@${WSL_IP}:${LOCAL_PORT}/${PGDB}?schema=public"
 
 echo -n "==> public IP: "; curl -4 -sS --max-time 10 https://api.ipify.org; echo
 echo "==> Telegram getMe"
@@ -130,8 +150,15 @@ if not data.get("ok"):
   sys.exit(2)
 '
 
+echo "==> probe DB via docker bridge -> ${WSL_IP}:${LOCAL_PORT}"
+if ! docker run --rm busybox:1.36 nc -zvw5 "${WSL_IP}" "${LOCAL_PORT}" >/dev/null 2>&1; then
+  echo "docker cannot reach tunnel at ${WSL_IP}:${LOCAL_PORT}" >&2
+  exit 1
+fi
+
 echo "==> start telegram-poll (Ctrl+C to stop)"
-docker run --rm --network=host \
+# No --network=host: Docker Desktop host-net cannot see WSL loopback/SSH tunnels.
+docker run --rm \
   -v "$ROOT/scripts:/app/scripts:ro" \
   -e DATABASE_URL \
   -e TELEGRAM_BOT_TOKEN \
