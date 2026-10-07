@@ -74,7 +74,7 @@ export default defineNuxtConfig({
     telegramWebhookSecret: '',
     public: {
       appName: 'Fitnessgirl Meet',
-      freePreviewCount: 3,
+      freePreviewCount: 20,
       siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000',
       ogImage:
         process.env.NUXT_PUBLIC_OG_IMAGE ||

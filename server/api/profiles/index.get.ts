@@ -1,6 +1,6 @@
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
-  const previewCount = Number(config.public.freePreviewCount) || 3
+  const previewCount = Number(config.public.freePreviewCount) || 20
   const query = getQuery(event)
 
   const limitRaw = Number(query.limit ?? 24)
