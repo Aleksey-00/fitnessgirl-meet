@@ -34,8 +34,28 @@ export default defineNitroPlugin(() => {
   if (pgPass && (/change.?me|fitnessgirl$/i.test(pgPass) || pgPass.length < 12)) {
     errors.push('POSTGRES_PASSWORD must be a strong unique password (≥12 chars)')
   }
-  if (!String(process.env.PAYMENT_CARD || '').trim() && !String(process.env.PAYMENT_PHONE || '').trim()) {
-    errors.push('Set PAYMENT_CARD and/or PAYMENT_PHONE for /subscribe')
+  const rkLogin = String(
+    process.env.ROBOKASSA_MERCHANT_LOGIN || process.env.NUXT_ROBOKASSA_MERCHANT_LOGIN || ''
+  ).trim()
+  const rkPassword1 = String(
+    process.env.ROBOKASSA_PASSWORD1 || process.env.NUXT_ROBOKASSA_PASSWORD1 || ''
+  ).trim()
+  const rkPassword2 = String(
+    process.env.ROBOKASSA_PASSWORD2 || process.env.NUXT_ROBOKASSA_PASSWORD2 || ''
+  ).trim()
+  const rkFieldsSet = [rkLogin, rkPassword1, rkPassword2].filter(Boolean).length
+  const robokassaReady = rkFieldsSet === 3
+  if (rkFieldsSet > 0 && !robokassaReady) {
+    errors.push(
+      'ROBOKASSA_MERCHANT_LOGIN, ROBOKASSA_PASSWORD1 and ROBOKASSA_PASSWORD2 must all be set together'
+    )
+  }
+  if (
+    !robokassaReady &&
+    !String(process.env.PAYMENT_CARD || '').trim() &&
+    !String(process.env.PAYMENT_PHONE || '').trim()
+  ) {
+    errors.push('Set PAYMENT_CARD and/or PAYMENT_PHONE for /subscribe (or configure Robokassa)')
   }
 
   if (errors.length) {

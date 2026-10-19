@@ -32,7 +32,8 @@ docker compose --profile cron up -d indexer-daily
 | `POSTGRES_PASSWORD` | ≥12 символов, не `change-me` / дефолт |
 | `NUXT_SESSION_PASSWORD` | ≥32 символов, уникальный секрет |
 | `NUXT_PUBLIC_SITE_URL` | `https://your-domain.com` (не localhost) |
-| `PAYMENT_CARD` и/или `PAYMENT_PHONE` | реквизиты на `/subscribe` |
+| `PAYMENT_CARD` и/или `PAYMENT_PHONE` | реквизиты на `/subscribe` (не нужны, если настроена Robokassa) |
+| `ROBOKASSA_MERCHANT_LOGIN/PASSWORD1/PASSWORD2` | опционально — включает оплату картой/СБП через Robokassa вместо только ручного перевода |
 | `ADMIN_EMAIL` | email админа (роль при регистрации/логине) |
 | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ADMIN_CHAT_ID` | если нужен approve в TG |
 | `TELEGRAM_WEBHOOK_SECRET` | ≥16 символов (обязателен при включённом TG) |

@@ -54,6 +54,11 @@ model Subscription {
   @@index([userId, status])
 }
 
+/// NOTE: a partial unique index enforces at most one `status = 'pending'` row per `userId`
+/// (see migration `20261019153000_payment_claim_one_pending_per_user`). Prisma's schema
+/// language has no syntax for partial/filtered unique indexes, so it is SQL-only and not
+/// represented here via `@@unique` — do not add a plain `@@unique([userId])`, that would
+/// incorrectly forbid a second *non-pending* claim for the same user.
 model PaymentClaim {
   id                 String      @id @default(cuid())
   userId             String
@@ -63,8 +68,10 @@ model PaymentClaim {
   status             ClaimStatus @default(pending)
   /** Set when admin Telegram message with approve/reject buttons was sent. */
   telegramNotifiedAt DateTime?
-  /** manual | yookassa */
+  /** manual | robokassa | yookassa */
   provider           String      @default("manual")
+  /** Robokassa InvId — unique per payment, sent to Robokassa and used to match ResultURL callbacks. */
+  invId              Int         @unique @default(autoincrement())
   /** YooKassa payment.id — set once the API call succeeds. */
   yookassaPaymentId  String?     @unique
   /** Set when provider confirms payment.succeeded (manual claims keep this null). */

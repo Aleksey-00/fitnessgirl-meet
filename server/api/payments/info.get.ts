@@ -1,3 +1,3 @@
 export default defineEventHandler(async () => {
-  return getPaymentRuntime()
+  return { ...getPaymentRuntime(), robokassaEnabled: robokassaEnabled() }
 })

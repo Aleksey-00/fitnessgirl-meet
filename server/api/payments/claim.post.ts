@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 
 const bodySchema = z.object({
@@ -12,6 +13,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Некорректные данные' })
   }
 
+  // Abandoned Robokassa checkouts shouldn't block a manual claim forever.
+  await releaseStaleRobokassaClaims(user.id)
+
   const pending = await prisma.paymentClaim.findFirst({
     where: { userId: user.id, status: 'pending' }
   })
@@ -19,13 +23,21 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 409, statusMessage: 'У вас уже есть заявка на проверке' })
   }
 
-  const claim = await prisma.paymentClaim.create({
-    data: {
-      userId: user.id,
-      amount: payment.priceRub,
-      note: parsed.data.note || null
+  let claim
+  try {
+    claim = await prisma.paymentClaim.create({
+      data: {
+        userId: user.id,
+        amount: payment.priceRub,
+        note: parsed.data.note || null
+      }
+    })
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      throw createError({ statusCode: 409, statusMessage: 'У вас уже есть заявка на проверке' })
     }
-  })
+    throw e
+  }
 
   try {
     const sent = await notifyNewPaymentClaim({

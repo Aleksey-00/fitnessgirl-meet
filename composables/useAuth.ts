@@ -1,7 +1,15 @@
+export type PendingClaim = {
+  id: string
+  /** manual | robokassa | yookassa */
+  provider: string
+  /** Set once the provider confirms payment (manual claims keep this null). */
+  paidAt: string | null
+}
+
 export type AuthMe = {
   user: { id: string; email: string; role: string; gender?: 'male' | 'female' } | null
   subscribed: boolean
-  pendingClaim?: boolean
+  pendingClaim?: PendingClaim | null
 }
 
 /**
@@ -36,7 +44,7 @@ export function useAuth() {
 
   async function logout() {
     await apiFetch('/api/auth/logout', { method: 'POST' })
-    me.value = { user: null, subscribed: false, pendingClaim: false }
+    me.value = { user: null, subscribed: false, pendingClaim: null }
     ready.value = true
     if (import.meta.client) {
       window.location.assign('/')

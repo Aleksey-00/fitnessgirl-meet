@@ -113,6 +113,7 @@ async function saveVkToken() {
               <th>Когда</th>
               <th>Email</th>
               <th>Сумма</th>
+              <th>Способ</th>
               <th>Комментарий</th>
               <th>Статус</th>
               <th />
@@ -123,8 +124,9 @@ async function saveVkToken() {
               <td>{{ new Date(c.createdAt).toLocaleString('ru-RU') }}</td>
               <td>{{ c.user.email }}</td>
               <td>{{ c.amount }} ₽</td>
+              <td>{{ c.provider === 'robokassa' ? 'Robokassa' : 'Вручную' }}</td>
               <td>{{ c.note || '—' }}</td>
-              <td>{{ c.status }}</td>
+              <td>{{ c.status }}{{ c.paidAt ? ' · оплачено' : '' }}</td>
               <td style="white-space: nowrap">
                 <template v-if="c.status === 'pending'">
                   <button

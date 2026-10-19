@@ -12,6 +12,8 @@ export default defineEventHandler(async (event) => {
     amount: c.amount,
     note: c.note,
     status: c.status,
+    provider: c.provider,
+    paidAt: c.paidAt ? c.paidAt.toISOString() : null,
     createdAt: c.createdAt.toISOString(),
     user: c.user
   }))

@@ -3,11 +3,21 @@ const { me, refresh: refreshMe } = useAuth()
 await refreshMe()
 const { data: info } = await useFetch('/api/payments/info')
 
+const route = useRoute()
+
 const note = ref('')
 const message = ref('')
 const error = ref('')
 const pending = ref(false)
+const robokassaError = ref('')
+const robokassaPending = ref(false)
+const cancelPending = ref(false)
 const waitingApproval = ref(Boolean(me.value?.pendingClaim && !me.value?.subscribed))
+
+/** Robokassa claims never get stuck waiting on Telegram — show retry/cancel instead of a dead end. */
+const isRobokassaPending = computed(() => me.value?.pendingClaim?.provider === 'robokassa')
+/** Disable both pay actions while either one is in flight, so the user can't fire two at once. */
+const payActionsBusy = computed(() => pending.value || robokassaPending.value)
 
 usePageSeo({
   title: 'Доступ к полной подборке',
@@ -82,7 +92,75 @@ async function claim() {
   }
 }
 
-onMounted(() => {
+async function payWithRobokassa() {
+  robokassaError.value = ''
+  robokassaPending.value = true
+  try {
+    // Backend reuses the existing unpaid Robokassa claim (if any) and returns a fresh paymentUrl
+    // for the same InvId, so this doubles as the "Попробовать снова" retry action.
+    const res = await $fetch<{ paymentUrl: string }>('/api/payments/robokassa/create', {
+      method: 'POST'
+    })
+    await navigateTo(res.paymentUrl, { external: true })
+  } catch (e: any) {
+    const status = e?.statusCode || e?.status || e?.data?.statusCode
+    const msg = e?.data?.statusMessage || 'Не удалось создать платёж'
+    if (status === 409) {
+      message.value = 'Заявка уже на проверке. Ждём подтверждение — страница обновится сама.'
+      await refreshMe()
+      startWaitingForApproval()
+    } else {
+      robokassaError.value = msg
+    }
+  } finally {
+    robokassaPending.value = false
+  }
+}
+
+async function cancelRobokassa() {
+  robokassaError.value = ''
+  cancelPending.value = true
+  try {
+    await $fetch('/api/payments/robokassa/cancel', { method: 'POST' })
+    message.value = ''
+    error.value = ''
+    waitingApproval.value = false
+    stopPolling()
+    await refreshMe()
+  } catch (e: any) {
+    const msg = e?.data?.statusMessage || 'Не удалось отменить заявку'
+    robokassaError.value = msg
+  } finally {
+    cancelPending.value = false
+  }
+}
+
+onMounted(async () => {
+  const rk = route.query.rk
+
+  // FailURL: reject unpaid Robokassa claim immediately so the user can pay again
+  // (admin/Telegram remain for manual claims and as a fallback for stuck Robokassa ones).
+  if (rk === 'fail') {
+    waitingApproval.value = false
+    stopPolling()
+    try {
+      if (me.value?.pendingClaim?.provider === 'robokassa') {
+        await $fetch('/api/payments/robokassa/cancel', { method: 'POST' })
+      }
+    } catch {
+      /* already rejected / no claim — still show retry */
+    }
+    await refreshMe()
+    robokassaError.value = 'Платёж не завершён. Можно оплатить снова.'
+    return
+  }
+
+  if (rk === 'ok' && !me.value?.subscribed) {
+    message.value = 'Платёж получен — активируем доступ…'
+    startWaitingForApproval()
+    return
+  }
+
   if (waitingApproval.value) startWaitingForApproval()
 })
 
@@ -105,7 +183,11 @@ watch(
   <section class="section">
     <div class="container">
       <h1>Подписка</h1>
-      <p class="lead">
+      <p v-if="info?.robokassaEnabled" class="lead">
+        Оплатите картой или через СБП — доступ открывается сразу после оплаты.
+        Также можно перевести на Сбер вручную, если это удобнее.
+      </p>
+      <p v-else class="lead">
         Оплата переводом на карту / СБП.
         <strong>Переводить нужно только на реквизиты Сбербанка</strong>
         (карта или СБП ниже) — откуда отправляете, не важно.
@@ -121,58 +203,83 @@ watch(
 
       <div v-else-if="waitingApproval" class="panel" style="margin-bottom: 1.25rem">
         <strong>Заявка на проверке</strong>
-        <p style="margin: 0.5rem 0 0; color: var(--muted)">
+        <p v-if="isRobokassaPending" style="margin: 0.5rem 0 0; color: var(--muted)">
+          Оплата прошла — доступ откроется автоматически. Если страница зависла, админ может подтвердить
+          заявку вручную. Если передумали до оплаты — отмените и оплатите снова.
+        </p>
+        <p v-else style="margin: 0.5rem 0 0; color: var(--muted)">
           Как только перевод подтвердят в Telegram или админке, здесь сразу появится доступ к анкетам —
           перезагружать страницу не нужно.
         </p>
         <p v-if="message" class="ok" style="margin-top: 0.75rem">{{ message }}</p>
-        <p class="waiting-pulse" aria-live="polite">Ожидаем подтверждение…</p>
-      </div>
-
-      <div class="panel">
-        <p class="bank-notice" role="note">
-          Обязательно: перевод только <strong>на Сбербанк</strong> (реквизиты ниже). Банк отправителя любой.
+        <p v-if="robokassaError" class="error" style="margin-top: 0.75rem">{{ robokassaError }}</p>
+        <p class="waiting-pulse" aria-live="polite">
+          {{ isRobokassaPending ? 'Активируем доступ…' : 'Ожидаем подтверждение…' }}
         </p>
-        <dl>
-          <dt>Банк получателя</dt>
-          <dd>{{ info?.bank || 'Сбербанк' }}</dd>
-          <dt>Сумма</dt>
-          <dd>{{ info?.priceRub || 450 }} ₽</dd>
-          <dt>Срок</dt>
-          <dd>{{ info?.days || 30 }} дней</dd>
-          <dt>Получатель</dt>
-          <dd>{{ info?.holder || '—' }}</dd>
-          <dt>Карта Сбербанка</dt>
-          <dd>{{ info?.card || '—' }}</dd>
-          <dt>СБП / телефон Сбербанка</dt>
-          <dd>{{ info?.phone || '—' }}</dd>
-        </dl>
-
-        <template v-if="!me?.user">
-          <p style="color: var(--muted)">Сначала войдите или зарегистрируйтесь.</p>
-          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap">
-            <NuxtLink class="btn btn-primary" to="/register">Регистрация</NuxtLink>
-            <NuxtLink class="btn btn-ghost" to="/login">Вход</NuxtLink>
-          </div>
-        </template>
-
-        <form
-          v-else-if="!me.subscribed && !waitingApproval"
-          class="form"
-          style="max-width: none"
-          @submit.prevent="claim"
-        >
-          <label>
-            Комментарий к переводу (необязательно: последние 4 цифры, имя отправителя)
-            <input v-model="note" type="text" maxlength="200" placeholder="Например: перевод от Ивана, ****1234" />
-          </label>
-          <p v-if="error" class="error">{{ error }}</p>
-          <p v-if="message" class="ok">{{ message }}</p>
-          <button class="btn btn-primary" type="submit" :disabled="pending">
-            {{ pending ? 'Отправляем…' : 'Я перевёл на Сбербанк' }}
+        <div v-if="isRobokassaPending" style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem">
+          <button
+            class="btn btn-ghost"
+            type="button"
+            :disabled="payActionsBusy || cancelPending"
+            @click="cancelRobokassa"
+          >
+            {{ cancelPending ? 'Отменяем…' : 'Отменить и оплатить снова' }}
           </button>
-        </form>
+        </div>
       </div>
+
+      <div v-if="!me?.user" class="panel">
+        <p style="color: var(--muted)">Сначала войдите или зарегистрируйтесь.</p>
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap">
+          <NuxtLink class="btn btn-primary" to="/register">Регистрация</NuxtLink>
+          <NuxtLink class="btn btn-ghost" to="/login">Вход</NuxtLink>
+        </div>
+      </div>
+
+      <template v-else-if="!me.subscribed && !waitingApproval">
+        <div v-if="info?.robokassaEnabled" class="panel" style="margin-bottom: 1.25rem">
+          <p style="margin: 0 0 0.75rem; color: var(--muted)">
+            {{ info?.priceRub || 450 }} ₽ · доступ на {{ info?.days || 30 }} дней
+          </p>
+          <p v-if="robokassaError" class="error">{{ robokassaError }}</p>
+          <button class="btn btn-primary" type="button" :disabled="payActionsBusy" @click="payWithRobokassa">
+            {{ robokassaPending ? 'Открываем оплату…' : 'Оплатить картой / СБП' }}
+          </button>
+        </div>
+
+        <div class="panel">
+          <h2 v-if="info?.robokassaEnabled" style="margin-top: 0">Или перевод на Сбер вручную</h2>
+          <p class="bank-notice" role="note">
+            Обязательно: перевод только <strong>на Сбербанк</strong> (реквизиты ниже). Банк отправителя любой.
+          </p>
+          <dl>
+            <dt>Банк получателя</dt>
+            <dd>{{ info?.bank || 'Сбербанк' }}</dd>
+            <dt>Сумма</dt>
+            <dd>{{ info?.priceRub || 450 }} ₽</dd>
+            <dt>Срок</dt>
+            <dd>{{ info?.days || 30 }} дней</dd>
+            <dt>Получатель</dt>
+            <dd>{{ info?.holder || '—' }}</dd>
+            <dt>Карта Сбербанка</dt>
+            <dd>{{ info?.card || '—' }}</dd>
+            <dt>СБП / телефон Сбербанка</dt>
+            <dd>{{ info?.phone || '—' }}</dd>
+          </dl>
+
+          <form class="form" style="max-width: none" @submit.prevent="claim">
+            <label>
+              Комментарий к переводу (необязательно: последние 4 цифры, имя отправителя)
+              <input v-model="note" type="text" maxlength="200" placeholder="Например: перевод от Ивана, ****1234" />
+            </label>
+            <p v-if="error" class="error">{{ error }}</p>
+            <p v-if="message" class="ok">{{ message }}</p>
+            <button class="btn btn-primary" type="submit" :disabled="payActionsBusy">
+              {{ pending ? 'Отправляем…' : 'Я перевёл на Сбербанк' }}
+            </button>
+          </form>
+        </div>
+      </template>
     </div>
   </section>
 </template>

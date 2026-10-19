@@ -1,7 +1,7 @@
 export default defineEventHandler(async (event) => {
   const session = readSession(event)
   if (!session) {
-    return { user: null, subscribed: false, pendingClaim: false }
+    return { user: null, subscribed: false, pendingClaim: null }
   }
 
   const user = await prisma.user.findUnique({
@@ -9,17 +9,24 @@ export default defineEventHandler(async (event) => {
     select: { id: true, email: true, role: true, gender: true }
   })
   if (!user) {
-    return { user: null, subscribed: false, pendingClaim: false }
+    return { user: null, subscribed: false, pendingClaim: null }
   }
 
   const subscribed = await userHasActiveSubscription(user.id)
-  const pendingClaim = subscribed
-    ? false
-    : Boolean(
-        await prisma.paymentClaim.findFirst({
-          where: { userId: user.id, status: 'pending' },
-          select: { id: true }
-        })
-      )
+  const pendingClaimRow = subscribed
+    ? null
+    : await prisma.paymentClaim.findFirst({
+        where: { userId: user.id, status: 'pending' },
+        select: { id: true, provider: true, paidAt: true }
+      })
+
+  const pendingClaim = pendingClaimRow
+    ? {
+        id: pendingClaimRow.id,
+        provider: pendingClaimRow.provider,
+        paidAt: pendingClaimRow.paidAt ? pendingClaimRow.paidAt.toISOString() : null
+      }
+    : null
+
   return { user, subscribed, pendingClaim }
 })

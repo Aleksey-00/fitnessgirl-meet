@@ -76,7 +76,7 @@ async function notifyPendingClaims() {
     SELECT c.id, c.amount, c.note, u.email
     FROM "PaymentClaim" c
     JOIN "User" u ON u.id = c."userId"
-    WHERE c.status = 'pending' AND c."telegramNotifiedAt" IS NULL
+    WHERE c.status = 'pending' AND c."telegramNotifiedAt" IS NULL AND c.provider = 'manual'
     ORDER BY c."createdAt" ASC
     LIMIT 20
   `

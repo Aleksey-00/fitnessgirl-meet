@@ -16,6 +16,12 @@ export default defineEventHandler((event) => {
     assertRateLimit(event, 'opt-out', { limit: 10, windowMs: 60 * 60_000 })
   } else if (path === '/api/payments/claim') {
     assertRateLimit(event, 'claim', { limit: 10, windowMs: 60 * 60_000 })
+  } else if (path === '/api/payments/robokassa/create') {
+    assertRateLimit(event, 'robokassa-create', { limit: 10, windowMs: 60 * 60_000 })
+  } else if (path === '/api/payments/robokassa/cancel') {
+    assertRateLimit(event, 'robokassa-cancel', { limit: 20, windowMs: 60 * 60_000 })
+  } else if (path === '/api/payments/robokassa/result') {
+    assertRateLimit(event, 'robokassa-result', { limit: 120, windowMs: 60_000 })
   } else if (path.startsWith('/api/telegram/webhook')) {
     assertRateLimit(event, 'tg-webhook', { limit: 120, windowMs: 60_000 })
   }
