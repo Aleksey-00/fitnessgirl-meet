@@ -38,6 +38,21 @@ export function getPaymentRuntime() {
   }
 }
 
+/** Public реквизиты for /contacts and /offer. */
+export function getLegalRuntime() {
+  const config = useRuntimeConfig()
+  return {
+    entityName:
+      envStr('LEGAL_ENTITY_NAME', 'NUXT_LEGAL_ENTITY_NAME') ||
+      String(config.legalEntityName || '').trim(),
+    inn: envStr('LEGAL_INN', 'NUXT_LEGAL_INN') || String(config.legalInn || '').trim(),
+    ogrn: envStr('LEGAL_OGRN', 'NUXT_LEGAL_OGRN') || String(config.legalOgrn || '').trim(),
+    address: envStr('LEGAL_ADDRESS', 'NUXT_LEGAL_ADDRESS') || String(config.legalAddress || '').trim(),
+    email: envStr('LEGAL_EMAIL', 'NUXT_LEGAL_EMAIL') || String(config.legalEmail || '').trim(),
+    phone: envStr('LEGAL_PHONE', 'NUXT_LEGAL_PHONE') || String(config.legalPhone || '').trim()
+  }
+}
+
 export function getAdminEmail() {
   const config = useRuntimeConfig()
   return (

@@ -72,6 +72,12 @@ export default defineNuxtConfig({
     telegramBotToken: '',
     telegramAdminChatId: '',
     telegramWebhookSecret: '',
+    legalEntityName: '',
+    legalInn: '',
+    legalOgrn: '',
+    legalAddress: '',
+    legalEmail: '',
+    legalPhone: '',
     public: {
       appName: 'Fitnessgirl Meet',
       freePreviewCount: 20,

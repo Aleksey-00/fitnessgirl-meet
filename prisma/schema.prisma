@@ -63,6 +63,12 @@ model PaymentClaim {
   status             ClaimStatus @default(pending)
   /** Set when admin Telegram message with approve/reject buttons was sent. */
   telegramNotifiedAt DateTime?
+  /** manual | yookassa */
+  provider           String      @default("manual")
+  /** YooKassa payment.id — set once the API call succeeds. */
+  yookassaPaymentId  String?     @unique
+  /** Set when provider confirms payment.succeeded (manual claims keep this null). */
+  paidAt             DateTime?
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 

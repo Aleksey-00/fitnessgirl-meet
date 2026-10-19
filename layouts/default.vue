@@ -83,6 +83,9 @@ watch(menuOpen, (open) => {
           <NuxtLink to="/subscribe" @click="closeMenu">Подписка</NuxtLink>
           <NuxtLink to="/partners" @click="closeMenu">Студиям</NuxtLink>
           <NuxtLink to="/disclaimer" @click="closeMenu">Дисклеймер</NuxtLink>
+          <NuxtLink to="/offer" @click="closeMenu">Оферта</NuxtLink>
+          <NuxtLink to="/privacy" @click="closeMenu">Политика ПДН</NuxtLink>
+          <NuxtLink to="/contacts" @click="closeMenu">Контакты</NuxtLink>
           <NuxtLink to="/opt-out" @click="closeMenu">Opt-out</NuxtLink>
           <template v-if="me?.user">
             <NuxtLink v-if="me.user.role === 'admin'" to="/admin" @click="closeMenu">Админ</NuxtLink>
@@ -106,6 +109,9 @@ watch(menuOpen, (open) => {
         Публичные профили VK · спорт и ЗОЖ ·
         <NuxtLink to="/partners">студиям</NuxtLink> ·
         <NuxtLink to="/disclaimer">дисклеймер</NuxtLink> ·
+        <NuxtLink to="/offer">оферта</NuxtLink> ·
+        <NuxtLink to="/privacy">политика ПДН</NuxtLink> ·
+        <NuxtLink to="/contacts">контакты</NuxtLink> ·
         <NuxtLink to="/opt-out">скрыть профиль</NuxtLink>
       </div>
     </footer>
