@@ -1,0 +1,14 @@
+---
+description: Always warn a day before the Reg.Cloud VPS will stop for unpaid balance
+alwaysApply: true
+---
+
+# VPS billing reminder
+
+The production site `fitnessgirl-meet.ru` runs on **Рег.облако VPS Cyan Thorium** (ID `7997421`, IP `134.0.113.50`), not shared Host-0.
+
+- Pay **only** the cloud VPS balance (Рег.облако / облачный счёт). Never extend unused Host-0 or other hosting.
+- Warn **one day before** funds run out. At ~2.15 ₽/hour that is about **52 ₽** remaining.
+- Notify **`a.azorabekov1991@gmail.com`**. Prefer the Reg.Cloud «Уведомление о низком балансе» email; also say it in chat.
+- Do this on every check of hosting, VPS, or site downtime — do not wait to be asked.
+- Typical monthly burn is ~1569 ₽ (server + floating IP). A 600 ₽ top-up is ~11–12 days, not a month.
