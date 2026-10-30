@@ -45,6 +45,19 @@ for rel in ["docker/entrypoint.sh", "docker/entrypoint-tools.sh", "scripts/daily
         data = p.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
         p.write_bytes(data)
 PY
+echo "== seed prisma engine cache from running app (CDN fallback)"
+rm -rf _prisma_engine_cache/prisma _prisma_engine_cache/engines
+mkdir -p _prisma_engine_cache
+if docker inspect fitnessgirl-meet-app-1 >/dev/null 2>&1; then
+  docker cp fitnessgirl-meet-app-1:/app/node_modules/.prisma/. _prisma_engine_cache/prisma/ \
+    || echo "WARN: could not copy .prisma from running app"
+  docker cp fitnessgirl-meet-app-1:/app/node_modules/@prisma/engines/. _prisma_engine_cache/engines/ \
+    || echo "WARN: could not copy @prisma/engines from running app"
+  ls -la _prisma_engine_cache/prisma/client/libquery_engine-debian-openssl-3.0.x.so.node 2>/dev/null \
+    || echo "WARN: query engine missing in cache"
+else
+  echo "WARN: fitnessgirl-meet-app-1 not running — no prisma cache seed"
+fi
 echo "== migrate"
 docker compose run --rm --no-deps --entrypoint sh app -c "npx prisma migrate deploy"
 echo "== rebuild app"

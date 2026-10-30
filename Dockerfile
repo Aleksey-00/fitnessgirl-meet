@@ -24,7 +24,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-cert
   && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npx prisma generate
+# Optional offline cache (seeded on VPS from the running app when binaries.prisma.sh is flaky).
+RUN if [ -f _prisma_engine_cache/prisma/client/libquery_engine-debian-openssl-3.0.x.so.node ]; then \
+      mkdir -p node_modules/.prisma node_modules/@prisma/engines \
+      && cp -a _prisma_engine_cache/prisma/. node_modules/.prisma/ \
+      && if [ -d _prisma_engine_cache/engines ]; then cp -a _prisma_engine_cache/engines/. node_modules/@prisma/engines/; fi \
+      && echo "seeded prisma engines from _prisma_engine_cache"; \
+    fi
+# binaries.prisma.sh is flaky from some VPS networks — retry, then fall back to seeded engines.
+RUN set -e; \
+    ok=0; \
+    for i in 1 2 3 4 5 6; do \
+      if PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 npx prisma generate; then ok=1; break; fi; \
+      echo "prisma generate failed (attempt $i), retrying..."; \
+      sleep $((i * 5)); \
+    done; \
+    if [ "$ok" != "1" ]; then \
+      echo "WARN: prisma generate CDN failed — using seeded/cached engines"; \
+      test -f node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node; \
+    fi
 RUN npm run build
 # Keep runtime lean: drop ML optional packages (used only by tools/indexer).
 RUN npm uninstall --legacy-peer-deps --no-save \
@@ -48,9 +66,22 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/server/utils ./server/utils
 COPY --from=builder /app/models ./models
-# deps-tools used --ignore-scripts (nuxt prepare needs full tree) — generate Prisma
-# and build native bindings here.
-RUN npx prisma generate \
+COPY --from=builder /app/_prisma_engine_cache ./_prisma_engine_cache
+RUN if [ -f _prisma_engine_cache/prisma/client/libquery_engine-debian-openssl-3.0.x.so.node ]; then \
+      mkdir -p node_modules/.prisma node_modules/@prisma/engines \
+      && cp -a _prisma_engine_cache/prisma/. node_modules/.prisma/ \
+      && if [ -d _prisma_engine_cache/engines ]; then cp -a _prisma_engine_cache/engines/. node_modules/@prisma/engines/; fi; \
+    fi \
+ && set -e; \
+    ok=0; \
+    for i in 1 2 3 4 5 6; do \
+      if PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 npx prisma generate; then ok=1; break; fi; \
+      echo "prisma generate failed (attempt $i), retrying..."; \
+      sleep $((i * 5)); \
+    done; \
+    if [ "$ok" != "1" ]; then \
+      test -f node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node; \
+    fi \
   && npm rebuild sharp \
   && npm rebuild @tensorflow/tfjs-node --build-addon-from-source \
   && test -f node_modules/@tensorflow/tfjs-node/lib/napi-v8/tfjs_binding.node

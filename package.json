@@ -23,6 +23,7 @@
     "dedupe:photos": "tsx --env-file=.env scripts/dedupe-photos.ts",
     "refresh:photos": "tsx --env-file=.env scripts/refresh-photos.ts",
     "refresh:photos:check": "tsx --env-file=.env scripts/refresh-photos.ts --check",
+    "clear:dead-photos": "tsx --env-file=.env scripts/clear-dead-photos.ts",
     "telegram:webhook": "tsx --env-file=.env scripts/set-telegram-webhook.ts",
     "telegram:poll": "tsx --env-file=.env scripts/telegram-poll.ts",
     "start": "node .output/server/index.mjs",

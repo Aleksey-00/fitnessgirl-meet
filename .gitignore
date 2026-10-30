@@ -18,6 +18,10 @@ logs
 .fleet
 .idea
 
+# Local Prisma engine cache for offline/VPS builds (seeded from running app)
+_prisma_engine_cache/**
+!_prisma_engine_cache/.gitkeep
+
 # Local env files
 .env
 .env.*
