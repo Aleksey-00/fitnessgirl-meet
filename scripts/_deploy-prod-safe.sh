@@ -59,7 +59,8 @@ else
   echo "WARN: fitnessgirl-meet-app-1 not running — no prisma cache seed"
 fi
 echo "== migrate"
-docker compose run --rm --no-deps --entrypoint sh app -c "npx prisma migrate deploy"
+# -T: do not attach stdin (otherwise `bash -s` heredoc is consumed by compose run)
+docker compose run -T --rm --no-deps --entrypoint sh app -c "npx prisma migrate deploy"
 echo "== rebuild app"
 docker compose up -d --build app
 echo "== wait health"
