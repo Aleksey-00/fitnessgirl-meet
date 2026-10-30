@@ -64,6 +64,11 @@ const total = ref(firstPage.value?.total || 0)
 const loadingMore = ref(false)
 const switching = ref(false)
 const loadError = ref('')
+/** Hide broken VK CDN images (expired hotlinks) instead of browser alt-icon. */
+const brokenPhotos = reactive<Record<string, true>>({})
+function markPhotoBroken(id: string) {
+  brokenPhotos[id] = true
+}
 const bootError = computed(() => {
   if (!firstError.value) return ''
   return (firstError.value as any)?.data?.statusMessage || 'Не удалось загрузить каталог'
@@ -291,7 +296,7 @@ useJsonLd([
         >
           <div class="profile-card__media">
             <NuxtImg
-              v-if="p.photoUrl"
+              v-if="p.photoUrl && !brokenPhotos[p.id]"
               :src="p.photoUrl"
               :alt="p.displayName"
               width="400"
@@ -300,6 +305,8 @@ useJsonLd([
               :loading="i < 6 ? 'eager' : 'lazy'"
               :preload="i < 2"
               decoding="async"
+              referrerpolicy="no-referrer"
+              @error="markPhotoBroken(p.id)"
             />
           </div>
           <div class="profile-card__body">

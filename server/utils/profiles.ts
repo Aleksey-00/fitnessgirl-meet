@@ -91,6 +91,7 @@ export async function listVisibleProfilesPage(opts: {
     age: { gte: 18, lte: 35 },
     photoAgeStatus: 'ok',
     photoGender: catalogGender,
+    photoUrl: { not: null },
     AND: baseAnd
   }
 

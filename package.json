@@ -21,6 +21,8 @@
     "check:catalog": "tsx --env-file=.env scripts/rescan-catalog.ts",
     "download:face-models": "tsx --env-file=.env scripts/download-face-models.ts",
     "dedupe:photos": "tsx --env-file=.env scripts/dedupe-photos.ts",
+    "refresh:photos": "tsx --env-file=.env scripts/refresh-photos.ts",
+    "refresh:photos:check": "tsx --env-file=.env scripts/refresh-photos.ts --check",
     "telegram:webhook": "tsx --env-file=.env scripts/set-telegram-webhook.ts",
     "telegram:poll": "tsx --env-file=.env scripts/telegram-poll.ts",
     "start": "node .output/server/index.mjs",
