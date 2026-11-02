@@ -24,8 +24,7 @@ EXPOSE_NAME="fg-pg-expose"
 EXPOSE_CREATED=0
 TUNNEL_PID=""
 
-SSH=(ssh -F /dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=20 -i "$SSH_KEY" "$VPS")
-SCP=(scp -F /dev/null -o StrictHostKeyChecking=no -i "$SSH_KEY")
+SSH=(ssh -F /dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -i "$SSH_KEY" "$VPS")
 
 cleanup() {
   set +e
@@ -121,8 +120,10 @@ for i in $(seq 1 40); do
 done
 
 echo "==> fetch secrets from VPS .env"
+# One SSH session: write files, stream tar on stdout (scp/sftp hangs behind Clash).
 "${SSH[@]}" "python3 - <<'PY'
 from pathlib import Path
+import sys
 env={}
 for line in Path('${PROJECT_DIR}/.env').read_text().splitlines():
   if not line.strip() or line.strip().startswith('#') or '=' not in line: continue
@@ -133,14 +134,11 @@ Path('/tmp/fg-pg.pw').write_text(env.get('POSTGRES_PASSWORD',''))
 Path('/tmp/fg-pg.user').write_text(env.get('POSTGRES_USER') or 'fitnessgirl')
 Path('/tmp/fg-pg.db').write_text(env.get('POSTGRES_DB') or 'fitnessgirl')
 Path('/tmp/fg-sub.days').write_text(env.get('SUBSCRIPTION_DAYS') or '30')
-print('tg_token_len', len(env.get('TELEGRAM_BOT_TOKEN','')))
-PY"
-"${SCP[@]}" \
-  "${VPS}:/tmp/fg-tg.token" "${VPS}:/tmp/fg-tg.chat" \
-  "${VPS}:/tmp/fg-pg.pw" "${VPS}:/tmp/fg-pg.user" "${VPS}:/tmp/fg-pg.db" \
-  "${VPS}:/tmp/fg-sub.days" \
-  "$RUN_DIR/"
-"${SSH[@]}" "rm -f /tmp/fg-tg.token /tmp/fg-tg.chat /tmp/fg-pg.pw /tmp/fg-pg.user /tmp/fg-pg.db /tmp/fg-sub.days"
+print('tg_token_len', len(env.get('TELEGRAM_BOT_TOKEN','')), file=sys.stderr)
+PY
+tar -C /tmp -cf - fg-tg.token fg-tg.chat fg-pg.pw fg-pg.user fg-pg.db fg-sub.days
+rm -f /tmp/fg-tg.token /tmp/fg-tg.chat /tmp/fg-pg.pw /tmp/fg-pg.user /tmp/fg-pg.db /tmp/fg-sub.days
+" | tar -C "$RUN_DIR" -xf -
 chmod 600 "$RUN_DIR"/*
 
 PW="$(cat "$RUN_DIR/fg-pg.pw")"
@@ -152,15 +150,25 @@ export SUBSCRIPTION_DAYS="$(cat "$RUN_DIR/fg-sub.days")"
 PW_ENC="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$PW")"
 export DATABASE_URL="postgresql://${PGUSER}:${PW_ENC}@${WSL_IP}:${LOCAL_PORT}/${PGDB}?schema=public"
 
-echo -n "==> public IP: "; curl -4 -sS --max-time 10 https://api.ipify.org; echo
+echo -n "==> public IP: "; curl -4 -sS --max-time 10 https://api.ipify.org || echo "(ipify timeout)"; echo
 echo "==> Telegram getMe"
 python3 -c '
-import json, pathlib, urllib.request, sys
+import json, pathlib, urllib.request, urllib.error, sys, time
 token=pathlib.Path("'"$RUN_DIR"'/fg-tg.token").read_text().strip()
-data=json.load(urllib.request.urlopen("https://api.telegram.org/bot"+token+"/getMe", timeout=20))
-print("bot_ok" if data.get("ok") else data)
-if not data.get("ok"):
-  sys.exit(2)
+last=None
+for i in range(1, 6):
+  try:
+    data=json.load(urllib.request.urlopen("https://api.telegram.org/bot"+token+"/getMe", timeout=20))
+    print("bot_ok" if data.get("ok") else data)
+    if data.get("ok"):
+      sys.exit(0)
+    last=data
+  except Exception as e:
+    last=e
+    print("getMe retry", i, e)
+    time.sleep(3)
+print("getMe failed:", last)
+sys.exit(2)
 '
 
 echo "==> probe DB via docker bridge -> ${WSL_IP}:${LOCAL_PORT}"
