@@ -28,6 +28,7 @@ SSH=(ssh -F /dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=20 -o Server
 
 cleanup() {
   set +e
+  docker rm -f fg-home-telegram-poll >/dev/null 2>&1 || true
   if [[ -n "${TUNNEL_PID:-}" ]] && kill -0 "$TUNNEL_PID" 2>/dev/null; then
     kill "$TUNNEL_PID" 2>/dev/null || true
   fi
@@ -177,13 +178,31 @@ if ! docker run --rm busybox:1.36 nc -zvw5 "${WSL_IP}" "${LOCAL_PORT}" >/dev/nul
   exit 1
 fi
 
-echo "==> start telegram-poll (Ctrl+C to stop)"
+POLL_NAME="fg-home-telegram-poll"
+echo "==> start telegram-poll container (${POLL_NAME})"
 # No --network=host: Docker Desktop host-net cannot see WSL loopback/SSH tunnels.
-docker run --rm \
+docker rm -f "$POLL_NAME" >/dev/null 2>&1 || true
+docker run -d --restart unless-stopped --name "$POLL_NAME" \
   -v "$ROOT/scripts:/app/scripts:ro" \
   -e DATABASE_URL \
   -e TELEGRAM_BOT_TOKEN \
   -e TELEGRAM_ADMIN_CHAT_ID \
   -e SUBSCRIPTION_DAYS \
   fitnessgirl-meet-indexer:latest \
-  npx tsx scripts/telegram-poll.ts
+  npx tsx scripts/telegram-poll.ts >/dev/null
+
+# Keep this process (and the SSH tunnel) alive while the poller runs.
+# systemd Restart=always will recreate tunnel+container if we exit.
+echo "==> watching ${POLL_NAME} (tunnel pid=${TUNNEL_PID:-?})"
+while docker ps --format '{{.Names}}' | grep -qx "$POLL_NAME"; do
+  if [[ -n "${TUNNEL_PID:-}" ]] && ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
+    echo "SSH tunnel died; exiting for systemd restart" >&2
+    docker rm -f "$POLL_NAME" >/dev/null 2>&1 || true
+    exit 1
+  fi
+  sleep 5
+done
+echo "poll container exited; dumping last logs" >&2
+docker logs "$POLL_NAME" 2>&1 | tail -n 80 || true
+docker rm -f "$POLL_NAME" >/dev/null 2>&1 || true
+exit 1
