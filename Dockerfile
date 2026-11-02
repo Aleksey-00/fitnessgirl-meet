@@ -24,14 +24,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-cert
   && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# Optional offline cache (seeded on VPS from the running app when binaries.prisma.sh is flaky).
+# Optional offline cache:
+# - _prisma_engine_cache: linux query engine from the running app (VPS)
+# - _prisma_client_overlay: schema-matching client JS from `prisma generate` on a machine with CDN access
 RUN if [ -f _prisma_engine_cache/prisma/client/libquery_engine-debian-openssl-3.0.x.so.node ]; then \
       mkdir -p node_modules/.prisma node_modules/@prisma/engines \
       && cp -a _prisma_engine_cache/prisma/. node_modules/.prisma/ \
       && if [ -d _prisma_engine_cache/engines ]; then cp -a _prisma_engine_cache/engines/. node_modules/@prisma/engines/; fi \
       && echo "seeded prisma engines from _prisma_engine_cache"; \
     fi
-# binaries.prisma.sh is flaky from some VPS networks — retry, then fall back to seeded engines.
+# binaries.prisma.sh is flaky from some VPS networks — retry, then keep linux engine + overlay client JS.
 RUN set -e; \
     ok=0; \
     for i in 1 2 3 4 5 6; do \
@@ -40,8 +42,18 @@ RUN set -e; \
       sleep $((i * 5)); \
     done; \
     if [ "$ok" != "1" ]; then \
-      echo "WARN: prisma generate CDN failed — using seeded/cached engines"; \
+      echo "WARN: prisma generate CDN failed — overlay client JS + seeded linux engine"; \
+      mkdir -p node_modules/.prisma/client; \
+      if [ -f _prisma_client_overlay/index.js ]; then \
+        cp -a _prisma_client_overlay/. node_modules/.prisma/client/; \
+      fi; \
+      if [ -f _prisma_engine_cache/prisma/client/libquery_engine-debian-openssl-3.0.x.so.node ]; then \
+        cp -f _prisma_engine_cache/prisma/client/libquery_engine-debian-openssl-3.0.x.so.node \
+          node_modules/.prisma/client/; \
+      fi; \
+      test -f node_modules/.prisma/client/index.js; \
       test -f node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node; \
+      grep -q 'invId' node_modules/.prisma/client/schema.prisma; \
     fi
 RUN npm run build
 # Keep runtime lean: drop ML optional packages (used only by tools/indexer).

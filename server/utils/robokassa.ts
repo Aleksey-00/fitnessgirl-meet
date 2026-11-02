@@ -30,6 +30,11 @@ export function getRobokassaRuntime() {
 }
 
 export function robokassaEnabled() {
+  // Explicit opt-in: credentials alone are not enough (shop may be pending activation).
+  const flag = (
+    envStr('ROBOKASSA_ENABLED', 'NUXT_ROBOKASSA_ENABLED') || ''
+  ).trim()
+  if (!/^(1|true|yes|on)$/i.test(flag)) return false
   const { merchantLogin, password1, password2 } = getRobokassaRuntime()
   return Boolean(merchantLogin && password1 && password2)
 }

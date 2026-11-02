@@ -9,25 +9,30 @@ export const ROBOKASSA_CLAIM_STALE_MS = 45 * 60_000
  * Only touches `provider='robokassa'` claims that never got a ResultURL callback (`paidAt IS NULL`).
  */
 export async function releaseStaleRobokassaClaims(userId: string) {
-  const stale = await prisma.paymentClaim.findMany({
-    where: {
-      userId,
-      provider: 'robokassa',
-      status: 'pending',
-      paidAt: null,
-      createdAt: { lt: new Date(Date.now() - ROBOKASSA_CLAIM_STALE_MS) }
-    },
-    select: { id: true, invId: true }
-  })
-  if (!stale.length) return
-  await prisma.paymentClaim.updateMany({
-    where: { id: { in: stale.map((c) => c.id) }, status: 'pending', paidAt: null },
-    data: { status: 'rejected' }
-  })
-  console.warn(
-    '[robokassa] auto-rejected stale unpaid claims',
-    stale.map((c) => ({ id: c.id, invId: c.invId }))
-  )
+  try {
+    const stale = await prisma.paymentClaim.findMany({
+      where: {
+        userId,
+        provider: 'robokassa',
+        status: 'pending',
+        paidAt: null,
+        createdAt: { lt: new Date(Date.now() - ROBOKASSA_CLAIM_STALE_MS) }
+      },
+      select: { id: true }
+    })
+    if (!stale.length) return
+    await prisma.paymentClaim.updateMany({
+      where: { id: { in: stale.map((c) => c.id) }, status: 'pending', paidAt: null },
+      data: { status: 'rejected' }
+    })
+    console.warn(
+      '[robokassa] auto-rejected stale unpaid claims',
+      stale.map((c) => c.id)
+    )
+  } catch (e) {
+    // Never block manual Sber claims if Robokassa cleanup/prisma client is broken.
+    console.error('[robokassa] releaseStaleRobokassaClaims failed', e)
+  }
 }
 
 /**

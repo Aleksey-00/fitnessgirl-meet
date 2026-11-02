@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  user
+  admin
+}
+
+enum Gender {
+  male
+  female
+}
+
+enum ClaimStatus {
+  pending
+  approved
+  rejected
+}
+
+enum SubscriptionStatus {
+  active
+  expired
+  cancelled
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  /**
+   * Viewer gender: male → women catalog, female → men catalog
+   */
+  gender        Gender         @default(male)
+  role          Role           @default(user)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  subscriptions Subscription[]
+  paymentClaims PaymentClaim[]
+}
+
+model Subscription {
+  id        String             @id @default(cuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startsAt  DateTime           @default(now())
+  expiresAt DateTime
+  status    SubscriptionStatus @default(active)
+  createdAt DateTime           @default(now())
+
+  @@index([userId, status])
+}
+
+/// NOTE: a partial unique index enforces at most one `status = 'pending'` row per `userId`
+/// (see migration `20261019153000_payment_claim_one_pending_per_user`). Prisma's schema
+/// language has no syntax for partial/filtered unique indexes, so it is SQL-only and not
+/// represented here via `@@unique` — do not add a plain `@@unique([userId])`, that would
+/// incorrectly forbid a second *non-pending* claim for the same user.
+model PaymentClaim {
+  id                 String      @id @default(cuid())
+  userId             String
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount             Int
+  note               String?
+  status             ClaimStatus @default(pending)
+  /**
+   * Set when admin Telegram message with approve/reject buttons was sent.
+   */
+  telegramNotifiedAt DateTime?
+  /**
+   * manual | robokassa | yookassa
+   */
+  provider           String      @default("manual")
+  /**
+   * Robokassa InvId — unique per payment, sent to Robokassa and used to match ResultURL callbacks.
+   */
+  invId              Int         @unique @default(autoincrement())
+  /**
+   * YooKassa payment.id — set once the API call succeeds.
+   */
+  yookassaPaymentId  String?     @unique
+  /**
+   * Set when provider confirms payment.succeeded (manual claims keep this null).
+   */
+  paidAt             DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@index([status])
+  @@index([status, telegramNotifiedAt])
+}
+
+model Profile {
+  id                    String    @id @default(cuid())
+  vkId                  BigInt    @unique
+  displayName           String
+  age                   Int?
+  city                  String    @default("Москва")
+  photoUrl              String?
+  photoHash             String?
+  photoEstimatedAge     Int?
+  photoAgeConfidence    Float?
+  photoAgeStatus        String? // ok | underage | unclear | male | error | pending
+  photoAgeCheckedAt     DateTime?
+  photoGender           String? // female | male | unknown
+  photoGenderConfidence Float?
+  score                 Float     @default(0)
+  signals               Json?
+  isHidden              Boolean   @default(false)
+  fetchedAt             DateTime  @default(now())
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([isHidden, score])
+  @@index([isHidden, photoGender, score])
+  @@index([photoHash])
+  @@index([photoAgeStatus])
+}
+
+model OptOutRequest {
+  id          String    @id @default(cuid())
+  vkId        BigInt?
+  url         String?
+  contact     String?
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+}
