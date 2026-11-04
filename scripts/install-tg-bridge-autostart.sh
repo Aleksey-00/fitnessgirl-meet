@@ -21,10 +21,6 @@ if [[ -f "$LOG_DIR/telegram-bridge.log" ]]; then
   fi
 fi
 
-echo "==> stop legacy nohup bridge (if any)"
-pkill -f '/scripts/run-home-telegram.sh' >/dev/null 2>&1 || true
-sleep 1
-
 echo "==> install user unit"
 mkdir -p "$UNIT_DIR"
 # Normalize CRLF from Windows checkout
@@ -49,7 +45,7 @@ sleep 3
 systemctl --user --no-pager --full status fg-telegram-bridge.service || true
 
 echo
-echo "OK: fg-telegram-bridge enabled (Restart=always, RestartSec=15)"
+echo "OK: fg-telegram-bridge enabled (Restart=always, RestartSec=5)"
 echo "Log: $LOG_DIR/telegram-bridge.log"
 echo "Commands:"
 echo "  systemctl --user status fg-telegram-bridge"

@@ -117,10 +117,11 @@ async function notifyPendingClaims() {
       console.error('notify failed', claim.id, sent?.description || sent)
       continue
     }
+    // Mark only after Telegram accepts the message (prefer rare duplicate over silent miss).
     await prisma.$executeRaw`
       UPDATE "PaymentClaim"
       SET "telegramNotifiedAt" = NOW(), "updatedAt" = NOW()
-      WHERE id = ${claim.id}
+      WHERE id = ${claim.id} AND "telegramNotifiedAt" IS NULL
     `
     console.log(`notified claim ${claim.id} (${claim.email})`)
   }
@@ -150,7 +151,8 @@ async function resolve(claimId: string, action: 'approve' | 'reject') {
     return { text: `❌ Отклонено\nEmail: ${claim.email}` }
   }
 
-  const days = Number(process.env.SUBSCRIPTION_DAYS || 30)
+  const daysRaw = Number(process.env.SUBSCRIPTION_DAYS || 30)
+  const days = Number.isFinite(daysRaw) && daysRaw > 0 ? daysRaw : 30
   const startsAt = new Date()
   const expiresAt = new Date(startsAt.getTime() + days * 24 * 60 * 60 * 1000)
   const subId = `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
@@ -185,6 +187,8 @@ function isAdminCallback(cb: any): boolean {
 
 let offset = 0
 
+let loops = 0
+
 async function loop() {
   // Notify first so new claims appear within ~getUpdates timeout, not after a long idle poll.
   await notifyPendingClaims()
@@ -200,10 +204,23 @@ async function loop() {
     return
   }
 
+  loops += 1
+  if (loops === 1 || loops % 30 === 0) {
+    console.log(`heartbeat loops=${loops} offset=${offset}`)
+  }
+  // Re-assert getUpdates ownership if something re-registered a webhook.
+  if (loops === 1 || loops % 60 === 0) {
+    const wh = await api('deleteWebhook', { drop_pending_updates: false })
+    if (!wh?.ok) console.warn('deleteWebhook refresh failed:', wh?.description || wh)
+  }
+
   for (const update of data.result || []) {
-    offset = update.update_id + 1
     const cb = update.callback_query
-    if (!cb) continue
+    if (!cb) {
+      // Non-callback updates (if any) can be skipped safely.
+      offset = update.update_id + 1
+      continue
+    }
 
     try {
       if (!isAdminCallback(cb)) {
@@ -216,6 +233,7 @@ async function loop() {
           text: 'Нет доступа',
           show_alert: true
         })
+        offset = update.update_id + 1
         continue
       }
 
@@ -225,16 +243,23 @@ async function loop() {
           callback_query_id: cb.id,
           text: 'Неизвестная команда'
         })
+        offset = update.update_id + 1
         continue
       }
 
       const action = m[1] === 'ok' ? 'approve' : 'reject'
       console.log(`handling ${action} for ${m[2]}`)
+      // Resolve in DB first so a SIGTERM after this still leaves a correct subscription.
       const result = await resolve(m[2], action)
+      console.log(result.text.replace(/\n/g, ' | '))
+      // Ack offset before slow Telegram UI edits — DB is already correct; redelivery would
+      // only return «Уже: approved» and confuse the admin with a second toast.
+      offset = update.update_id + 1
+      const toast = result.text.split('\n')[0] || (action === 'approve' ? 'Подтверждено' : 'Отклонено')
       await api('answerCallbackQuery', {
         callback_query_id: cb.id,
-        text: action === 'approve' ? 'Подтверждено' : 'Отклонено',
-        show_alert: false
+        text: toast.slice(0, 200),
+        show_alert: true
       })
       if (cb.message?.chat?.id && cb.message?.message_id) {
         const edited = await api('editMessageText', {
@@ -250,7 +275,6 @@ async function loop() {
           })
         }
       }
-      console.log(result.text.replace(/\n/g, ' | '))
     } catch (e) {
       console.error('callback handler error:', e instanceof Error ? e.message : e)
       try {
@@ -262,6 +286,7 @@ async function loop() {
       } catch {
         /* ignore */
       }
+      // Do not advance offset — Telegram will redeliver on the next getUpdates.
     }
   }
 }
@@ -272,8 +297,9 @@ async function main() {
   await prisma.$executeRawUnsafe(`
     ALTER TABLE "PaymentClaim" ADD COLUMN IF NOT EXISTS "telegramNotifiedAt" TIMESTAMP(3)
   `)
-  // Drop stale webhook + queued updates so a previous poller/webhook cannot steal callbacks.
-  const del = await api('deleteWebhook', { drop_pending_updates: true })
+  // Detach webhook so getUpdates works. Do NOT drop pending updates — a restart
+  // mid-click would otherwise swallow approve/reject callbacks.
+  const del = await api('deleteWebhook', { drop_pending_updates: false })
   console.log('deleteWebhook:', del?.ok ? 'ok' : del)
 
   let dbFails = 0

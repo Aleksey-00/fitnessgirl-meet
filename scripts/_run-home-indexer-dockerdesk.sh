@@ -160,12 +160,13 @@ DB_HOST="${FG_DB_HOST:-host.docker.internal}"
 echo "==> start indexer ${MODE_ARGS[*]} via ${DB_HOST}:${LOCAL_PORT}"
 docker run --rm \
   --add-host=host.docker.internal:host-gateway \
-  -e "DATABASE_URL=postgresql://${PGUSER}:${PW}@${DB_HOST}:${LOCAL_PORT}/${PGDB}?schema=public" \
+  -e "DATABASE_URL=postgresql://${PGUSER}:${PW}@${DB_HOST}:${LOCAL_PORT}/${PGDB}?schema=public&connection_limit=5&pool_timeout=60" \
   -e VK_ACCESS_TOKEN \
   -e "VK_DAILY_LIMIT=${DAILY_LIMIT}" \
   -e "VK_REQUEST_DELAY_MS=${VK_REQUEST_DELAY_MS:-3000}" \
   -e "VK_FLOOD_COOLDOWN_MS=${VK_FLOOD_COOLDOWN_MS:-600000}" \
   -e "VK_INDEX_SEX=${VK_INDEX_SEX:-}" \
+  -e "VK_INDEX_SALT=${VK_INDEX_SALT:-0}" \
   -v "$ROOT/scripts/index-vk.ts:/app/scripts/index-vk.ts:ro" \
   -v "$ROOT/server/utils:/app/server/utils:ro" \
   fitnessgirl-meet-indexer:latest \

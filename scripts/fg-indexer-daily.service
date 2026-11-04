@@ -1,0 +1,24 @@
+[Unit]
+Description=Fitnessgirl Meet — home daily VK index (women + men → prod DB)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/mnt/c/projects/fitnessgirl-meet
+ExecStartPre=/bin/bash -c 'until docker info >/dev/null 2>&1; do sleep 2; done'
+ExecStart=/bin/bash /mnt/c/projects/fitnessgirl-meet/scripts/run-home-daily-both.sh
+TimeoutStartSec=7200
+Environment=PYTHONUNBUFFERED=1
+Environment=FG_SSH_KEY=/home/aazor/.ssh/id_rsa
+Environment=FG_VPS=root@134.0.113.50
+Environment=FG_DAILY_LIMIT=100
+Environment=VK_REQUEST_DELAY_MS=1500
+Environment=HOME=/home/aazor
+Environment=USER=aazor
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+StandardOutput=append:/home/aazor/fg-logs/indexer-daily.log
+StandardError=append:/home/aazor/fg-logs/indexer-daily.log
+
+[Install]
+WantedBy=default.target

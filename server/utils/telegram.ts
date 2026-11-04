@@ -17,16 +17,25 @@ export function telegramEnabled() {
 async function telegramApi(method: string, body: Record<string, unknown>) {
   const token = botToken()
   if (!token) return null
-  const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  })
-  const data = (await res.json()) as { ok: boolean; description?: string; result?: unknown }
-  if (!data.ok) {
-    console.error(`Telegram ${method} failed:`, data.description || data)
+  // Short timeout: VPS often cannot reach api.telegram.org; home bridge retries.
+  // Without this, /api/payments/claim hangs ~10s+ and the UI sticks on «Отправляем…».
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 2500)
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    })
+    const data = (await res.json()) as { ok: boolean; description?: string; result?: unknown }
+    if (!data.ok) {
+      console.error(`Telegram ${method} failed:`, data.description || data)
+    }
+    return data
+  } finally {
+    clearTimeout(timer)
   }
-  return data
 }
 
 export function paymentClaimTelegramText(opts: {

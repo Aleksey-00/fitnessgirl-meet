@@ -1,0 +1,12 @@
+[Unit]
+Description=Fitnessgirl Meet — schedule home daily VK index (both sexes)
+
+[Timer]
+# Midday MSK-ish on the home machine clock; Persistent catches missed runs after sleep.
+OnCalendar=*-*-* 12:30:00
+Persistent=true
+RandomizedDelaySec=300
+Unit=fg-indexer-daily.service
+
+[Install]
+WantedBy=timers.target
