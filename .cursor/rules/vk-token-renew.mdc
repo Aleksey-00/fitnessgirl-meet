@@ -1,0 +1,33 @@
+---
+description: Always renew the home VK indexer token from the classic blank.html OAuth URL
+alwaysApply: true
+---
+
+# VK access token (home daily indexer)
+
+- Production VK calls for `users.search` / daily index use a **classic `vk1.a` user token**.
+- The token is **IP-bound to the home PC** and typically lasts **~24h** (no reliable offline scope).
+- **Never** invent tokens, paste from chat history, or use VK ID `vk2.a` for indexing.
+
+## Canonical renew URL (mandatory)
+
+Always obtain a fresh token **only** from this exact authorize URL (Cursor IDE browser, with the user's existing VK session):
+
+```
+https://oauth.vk.com/authorize?client_id=54762499&display=page&redirect_uri=https://oauth.vk.com/blank.html&response_type=token&v=5.199
+```
+
+Do not substitute another `client_id`, add `scope=offline`, or use `id.vk.com` / PKCE for the indexer token.
+
+## Agent procedure
+
+1. Open that URL in the Cursor browser (`browser_navigate`).
+2. After redirect to `oauth.vk.com/blank.html#access_token=vk1.a...` (or `oauth.vk.ru/blank.html#...`), read the **full** address bar / page URL.
+3. Save via `scripts/_vk-save-classic.sh` (write URL into `/tmp/fg-vk-classic-url.txt` first) — this updates VPS `/opt/fitnessgirl-meet/.env` `VK_ACCESS_TOKEN`.
+4. Verify from home: `bash scripts/_probe-vk-from-home.sh` (`users.get` must succeed).
+
+## When to renew
+
+- Before any daily index if probe fails (expired / invalid / wrong IP).
+- Proactively when the user asks to run daily index and the token is near expiry.
+- Do **not** ask the user to copy the token if the Cursor browser VK session works — renew yourself.

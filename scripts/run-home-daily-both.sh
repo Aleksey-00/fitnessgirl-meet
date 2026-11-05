@@ -5,6 +5,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# One run at a time (systemd timer + Windows Task both may fire near midnight).
+exec 8>/tmp/fg-daily-index.lock
+if ! flock -n 8; then
+  echo "[$(date -Iseconds)] home daily already running; skip"
+  exit 0
+fi
+
 export FG_DAILY_LIMIT="${FG_DAILY_LIMIT:-100}"
 export VK_REQUEST_DELAY_MS="${VK_REQUEST_DELAY_MS:-1500}"
 export VK_INDEX_SEX=both

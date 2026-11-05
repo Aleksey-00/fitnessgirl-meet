@@ -43,7 +43,8 @@ systemctl --user --no-pager status fg-indexer-daily.timer || true
 systemctl --user list-timers 'fg-indexer-daily.timer' --no-pager || true
 
 echo
-echo "OK: home daily BOTH sexes scheduled"
+echo "OK: home daily BOTH sexes → prod DB every night at 00:00 (local/MSK)"
 echo "Log: $LOG_DIR/indexer-daily.log"
 echo "Manual now:  systemctl --user start fg-indexer-daily.service"
 echo "Or:          bash $ROOT/scripts/run-home-daily-both.sh"
+echo "Windows arm: powershell -ExecutionPolicy Bypass -File scripts/install-windows-indexer-task.ps1"

@@ -131,10 +131,37 @@ export VK_ACCESS_TOKEN="$(cat "$RUN_DIR/fg-vk.token")"
 
 echo -n "==> public IP (must match VK token bind): "; curl -4 -sS --max-time 10 https://api.ipify.org; echo
 
+OAUTH_URL="$(tr -d '\r\n' <"$ROOT/scripts/vk-oauth-classic.url" 2>/dev/null || true)"
+OAUTH_URL="${OAUTH_URL:-https://oauth.vk.com/authorize?client_id=54762499&display=page&redirect_uri=https://oauth.vk.com/blank.html&response_type=token&v=5.199}"
+
+refetch_token_from_vps() {
+  "${SSH[@]}" "python3 -c \"
+from pathlib import Path
+env={}
+for line in Path('${PROJECT_DIR}/.env').read_text().splitlines():
+  if not line.strip() or line.strip().startswith('#') or '=' not in line: continue
+  k,v=line.split('=',1); env[k]=v.strip().strip(chr(34)).strip(chr(39))
+Path('/tmp/fg-vk.token').write_text(env.get('VK_ACCESS_TOKEN',''))
+print('token_len', len(env.get('VK_ACCESS_TOKEN','')))
+\""
+  "${SCP[@]}" "${VPS}:/tmp/fg-vk.token" "$RUN_DIR/"
+  "${SSH[@]}" "rm -f /tmp/fg-vk.token"
+  chmod 600 "$RUN_DIR/fg-vk.token"
+  export VK_ACCESS_TOKEN="$(cat "$RUN_DIR/fg-vk.token")"
+}
+
+# If Cursor agent (or operator) dropped a fresh blank.html URL, apply it before probing.
+if [[ -s /tmp/fg-vk-classic-url.txt ]]; then
+  echo "==> applying dropped classic OAuth URL (/tmp/fg-vk-classic-url.txt)"
+  bash "$ROOT/scripts/vk-renew-classic.sh" || true
+  refetch_token_from_vps
+fi
+
 if [[ $has_demo -eq 1 ]]; then
   echo "==> skip VK token check (demo mode, no VK calls)"
 else
 echo "==> VK token check"
+set +e
 python3 -c '
 import json, pathlib, urllib.parse, urllib.request, sys, time
 token=pathlib.Path("'"$RUN_DIR"'/fg-vk.token").read_text().strip()
@@ -150,9 +177,53 @@ for attempt in range(1, 6):
     if attempt == 5:
       print("vk_ok_flood"); sys.exit(0)
     time.sleep(15 * attempt); continue
+  # Auth failures → ask caller/agent to renew from classic blank.html URL.
+  if code in (5, 15) or "expired" in msg.lower() or "invalid access_token" in msg.lower() or "another ip" in msg.lower():
+    print("VK_TOKEN_NEEDS_RENEW", msg)
+    sys.exit(42)
   print(msg); sys.exit(2)
 print(last or "vk token check failed"); sys.exit(2)
 '
+vk_rc=$?
+set -e
+if [[ "$vk_rc" -eq 42 ]]; then
+  echo "==> VK token unusable — renew ONLY from:"
+  echo "    $OAUTH_URL"
+  echo "    (Cursor browser → blank.html#access_token=vk1.a... → scripts/vk-renew-classic.sh)"
+  # One automatic retry if a fresh URL appeared while we waited (agent drop).
+  for _wait in 1 2 3 4 5 6; do
+    if [[ -s /tmp/fg-vk-classic-url.txt ]]; then
+      echo "==> found dropped OAuth URL; renewing"
+      bash "$ROOT/scripts/vk-renew-classic.sh"
+      refetch_token_from_vps
+      python3 -c '
+import json, pathlib, urllib.parse, urllib.request, sys
+token=pathlib.Path("'"$RUN_DIR"'/fg-vk.token").read_text().strip()
+q=urllib.parse.urlencode({"v":"5.199","access_token":token})
+data=json.load(urllib.request.urlopen("https://api.vk.com/method/users.get?"+q, timeout=20))
+sys.exit(0 if "error" not in data else 2)
+' && echo "vk_ok_after_renew" && break
+    fi
+    sleep 5
+  done
+  # Re-probe; still bad → hard fail (agent must open OAUTH_URL).
+  python3 -c '
+import json, pathlib, urllib.parse, urllib.request, sys
+token=pathlib.Path("'"$RUN_DIR"'/fg-vk.token").read_text().strip()
+q=urllib.parse.urlencode({"v":"5.199","access_token":token})
+data=json.load(urllib.request.urlopen("https://api.vk.com/method/users.get?"+q, timeout=20))
+if "error" in data:
+  print(data["error"].get("error_msg", data["error"]))
+  sys.exit(42)
+print("vk_ok")
+' || {
+    echo "FATAL: still no usable VK token. Open Cursor browser:"
+    echo "  $OAUTH_URL"
+    exit 42
+  }
+elif [[ "$vk_rc" -ne 0 ]]; then
+  exit "$vk_rc"
+fi
 fi
 
 # Docker Desktop: host.docker.internal reaches the WSL/Windows host where tunnel listens.
