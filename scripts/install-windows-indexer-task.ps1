@@ -1,4 +1,4 @@
-﻿# Keep the home → prod daily VK indexer alive on this Windows PC.
+# Keep the home → prod daily VK indexer alive on this Windows PC.
 # - At logon: wake WSL and enable the systemd midnight timer
 # - Daily 00:00: start one both-sexes run into the production DB
 #
