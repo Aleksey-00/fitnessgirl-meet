@@ -18,7 +18,23 @@ export VK_INDEX_SEX=both
 # Same-day re-runs: bump salt so name/age shards rotate to fresh people.
 export VK_INDEX_SALT="${VK_INDEX_SALT:-$(date +%s)}"
 
-sed -i 's/\r$//' "$ROOT/scripts/_run-home-indexer-dockerdesk.sh" "$ROOT/scripts/index-vk.ts" 2>/dev/null || true
+sed -i 's/\r$//' "$ROOT/scripts/_run-home-indexer-dockerdesk.sh" "$ROOT/scripts/index-vk.ts" "$ROOT/scripts/vk-ensure-fresh-token.sh" 2>/dev/null || true
+
+# If classic token is dead, renew via Google Chrome on Windows (not Cursor browser).
+set +e
+bash "$ROOT/scripts/vk-ensure-fresh-token.sh" >/tmp/fg-daily-token-probe.log 2>&1
+probe_rc=$?
+set -e
+if [[ "$probe_rc" -eq 42 ]]; then
+  echo "[$(date -Iseconds)] VK token dead — opening Google Chrome classic OAuth"
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ROOT/scripts/vk-chrome-oauth-renew.ps1" || {
+    echo "[$(date -Iseconds)] Chrome VK renew failed; abort daily index"
+    exit 42
+  }
+elif [[ "$probe_rc" -ne 0 ]]; then
+  echo "[$(date -Iseconds)] VK token probe failed rc=$probe_rc; abort daily index"
+  exit "$probe_rc"
+fi
 
 echo "[$(date -Iseconds)] home daily BOTH sexes start limit=${FG_DAILY_LIMIT} delay=${VK_REQUEST_DELAY_MS}ms salt=${VK_INDEX_SALT}"
 bash "$ROOT/scripts/_run-home-indexer-dockerdesk.sh" --daily --sex=both

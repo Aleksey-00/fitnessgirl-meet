@@ -29,13 +29,14 @@ needs_renew=1
 at=$stamp
 reason=vk_token_unusable
 oauth_url=$OAUTH_URL
-hint=Open Cursor browser → oauth URL → save blank.html#access_token= via scripts/vk-renew-classic.sh
+hint=Open Google Chrome → canonical oauth URL → blank.html#access_token= via scripts/vk-chrome-oauth-renew.ps1
 EOF
   echo "[$stamp] VK_TOKEN_NEEDS_RENEW rc=42" | tee -a "$LOG_DIR/vk-pre-midnight-check.log"
   echo "RENEW_URL=$OAUTH_URL"
   echo "NEEDS_RENEW"
   exit 42
 fi
+
 
 echo "[$stamp] VK_PROBE_FAILED rc=$rc" | tee -a "$LOG_DIR/vk-pre-midnight-check.log"
 exit "$rc"

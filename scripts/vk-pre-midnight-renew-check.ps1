@@ -1,8 +1,9 @@
 ﻿# Pre-midnight VK token check (~23:00).
-# If the classic vk1.a token is dead: write a marker, open the OAuth URL, toast the user.
-# Run via Task Scheduler (registered by install-windows-indexer-task.ps1).
+# If classic vk1.a token is dead: open canonical OAuth in Google Chrome, capture token, save to VPS.
+# Never uses Cursor IDE browser.
 
 $ErrorActionPreference = 'Stop'
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root = 'C:\projects\fitnessgirl-meet'
 if ($PSScriptRoot) {
   $candidate = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -18,10 +19,7 @@ if (Test-Path $OAuthFile) {
 }
 
 $LogDir = Join-Path $env:USERPROFILE 'fg-logs'
-if (-not (Test-Path $LogDir)) {
-  # WSL home may differ; also try via wslpath later. Windows-side mirror:
-  New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
-}
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $WinLog = Join-Path $LogDir 'vk-pre-midnight-check.win.log'
 $stamp = Get-Date -Format 'yyyy-MM-ddTHH:mm:ssK'
 Add-Content -Path $WinLog -Value "[$stamp] starting pre-midnight VK check"
@@ -56,17 +54,24 @@ if ($rc -eq 0) {
 }
 
 if ($rc -eq 42) {
-  Add-Content -Path $WinLog -Value "needs renew → open $OAuthUrl"
-  try { Start-Process $OAuthUrl } catch { Add-Content -Path $WinLog -Value "open_url_failed: $($_.Exception.Message)" }
-  Show-FgToast 'Fitnessgirl VK token' "Токен протух. Открой Cursor → renew с blank.html (ссылка уже открыта). До 00:00 нужен свежий vk1.a."
-  # Agent marker on Windows side too
+  Add-Content -Path $WinLog -Value "needs renew → Google Chrome $OAuthUrl"
+  Show-FgToast 'Fitnessgirl VK token' 'Токен протух. Открываю Google Chrome — разреши доступ ВК, если спросит. До 00:00 нужен свежий vk1.a.'
+  $chromeRenew = Join-Path $ScriptDir 'vk-chrome-oauth-renew.ps1'
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $chromeRenew
+  $renewRc = $LASTEXITCODE
+  Add-Content -Path $WinLog -Value "chrome_renew_rc=$renewRc"
+  if ($renewRc -eq 0) {
+    Remove-Item -Force -ErrorAction SilentlyContinue (Join-Path $LogDir 'vk-needs-renew.flag')
+    exit 0
+  }
   $flag = Join-Path $LogDir 'vk-needs-renew.flag'
   @"
 needs_renew=1
 at=$stamp
 oauth_url=$OAuthUrl
-hint=Cursor browser → classic OAuth → scripts/vk-renew-classic.sh
+hint=Google Chrome classic OAuth blank.html#access_token=vk1.a → scripts/vk-chrome-oauth-renew.ps1
 "@ | Set-Content -Path $flag -Encoding UTF8
+  Show-FgToast 'Fitnessgirl VK token' 'Не удалось снять токен из Chrome. Разреши доступ ВК в окне Chrome или обнови сессию.'
   exit 42
 }
 

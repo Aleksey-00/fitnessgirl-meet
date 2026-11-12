@@ -279,46 +279,69 @@ async function upsertUser(
 
   const vkId = String(user.id)
   const displayName = [user.first_name, user.last_name].filter(Boolean).join(' ') || `id${user.id}`
-  const photoUrl = user.photo_max || user.photo_200 || null
-  if (!photoUrl) return 'skipped'
+  const token = process.env.VK_ACCESS_TOKEN || ''
+  if (!token) return 'skipped'
 
-  // Analyze BEFORE writing: only adult faces of the expected gender enter the catalog DB.
+  // Try avatar, then next album photos; if none pass face-check → cute placeholder (still catalog-visible).
+  const { catalogPlaceholderUrl, listProfilePhotoCandidates } = await import('../lib/catalogPhoto')
   const { estimateAgeFromPhotoUrl, isCatalogFacePass, photoAgeCheckEnabled } = await loadPhotoAge()
-  let face: PhotoAgeEstimate
-  if (photoAgeCheckEnabled()) {
-    face = await estimateAgeFromPhotoUrl(photoUrl)
-  } else {
+  const candidates = await listProfilePhotoCandidates(user, token, {
+    albumLimit: Number(process.env.VK_PHOTO_CANDIDATE_LIMIT || 12),
+    requestDelayMs: Number(process.env.VK_PHOTO_FETCH_DELAY_MS || 200)
+  })
+
+  let photoUrl: string | null = null
+  let face: PhotoAgeEstimate = {
+    estimatedAge: null,
+    looksUnderage: false,
+    confidence: 0,
+    status: 'error',
+    detail: 'no candidates'
+  }
+  let usedPlaceholder = false
+
+  if (photoAgeCheckEnabled() && candidates.length) {
+    for (let i = 0; i < candidates.length; i++) {
+      const url = candidates[i]
+      face = await estimateAgeFromPhotoUrl(url)
+      if (isCatalogFacePass(face, expectedGender)) {
+        photoUrl = url
+        console.log(
+          `photo-pick vk=${vkId} idx=${i + 1}/${candidates.length} status=${face.status} age=${face.estimatedAge}`
+        )
+        break
+      }
+      console.log(
+        `photo-skip vk=${vkId} idx=${i + 1}/${candidates.length} status=${face.status} age=${face.estimatedAge} gender=${face.gender}:${face.genderConfidence?.toFixed(2) ?? '-'}`
+      )
+    }
+  } else if (candidates.length) {
+    photoUrl = candidates[0]
     face = {
       estimatedAge: null,
       looksUnderage: false,
       confidence: 0,
-      status: 'error',
+      status: 'ok',
+      gender: expectedGender,
       detail: 'analyzer disabled'
     }
   }
 
-  const existed = existingIds.has(vkId)
-
-  if (!isCatalogFacePass(face, expectedGender)) {
-    if (existed) {
-      await prisma.profile.update({
-        where: { vkId: BigInt(user.id) },
-        data: {
-          photoEstimatedAge: face.estimatedAge,
-          photoAgeConfidence: face.confidence,
-          photoAgeStatus: face.status,
-          photoAgeCheckedAt: new Date(),
-          photoGender: face.gender ?? null,
-          photoGenderConfidence: face.genderConfidence ?? null,
-          isHidden: true
-        }
-      })
+  if (!photoUrl) {
+    photoUrl = catalogPlaceholderUrl(expectedGender)
+    usedPlaceholder = true
+    face = {
+      estimatedAge: null,
+      looksUnderage: false,
+      confidence: 0,
+      status: 'placeholder',
+      gender: expectedGender,
+      detail: candidates.length ? 'no face-pass photo' : 'no photos'
     }
-    console.log(
-      `reject vk=${vkId} name=${displayName} want=${expectedGender} status=${face.status} age=${face.estimatedAge} gender=${face.gender}:${face.genderConfidence?.toFixed(2) ?? '-'}`
-    )
-    return 'rejected'
   }
+
+  const existed = existingIds.has(vkId)
+  const photoAgeStatus = usedPlaceholder ? 'placeholder' : face.status === 'ok' ? 'ok' : 'placeholder'
 
   await prisma.profile.upsert({
     where: { vkId: BigInt(user.id) },
@@ -329,14 +352,14 @@ async function upsertUser(
       city: user.city?.title || 'Москва',
       photoUrl,
       score: scored.score,
-      signals: scored.signals,
+      signals: { ...scored.signals, photoPlaceholder: usedPlaceholder },
       fetchedAt: new Date(),
       isHidden: false,
       photoEstimatedAge: face.estimatedAge,
       photoAgeConfidence: face.confidence,
-      photoAgeStatus: face.status,
+      photoAgeStatus,
       photoAgeCheckedAt: new Date(),
-      photoGender: face.gender ?? expectedGender,
+      photoGender: expectedGender,
       photoGenderConfidence: face.genderConfidence ?? null
     },
     update: {
@@ -345,14 +368,14 @@ async function upsertUser(
       city: user.city?.title || 'Москва',
       photoUrl,
       score: scored.score,
-      signals: scored.signals,
+      signals: { ...scored.signals, photoPlaceholder: usedPlaceholder },
       fetchedAt: new Date(),
       isHidden: false,
       photoEstimatedAge: face.estimatedAge,
       photoAgeConfidence: face.confidence,
-      photoAgeStatus: face.status,
+      photoAgeStatus,
       photoAgeCheckedAt: new Date(),
-      photoGender: face.gender ?? expectedGender,
+      photoGender: expectedGender,
       photoGenderConfidence: face.genderConfidence ?? null
     }
   })
@@ -360,7 +383,7 @@ async function upsertUser(
   existingIds.add(vkId)
   const tag = existed ? 'updated' : 'created'
   console.log(
-    `${tag} vk=${vkId} name=${displayName} gender=${expectedGender} age=${scored.signals.age ?? '?'} score=${scored.score} photoAge=${face.estimatedAge ?? '?'}`
+    `${tag} vk=${vkId} name=${displayName} gender=${expectedGender} age=${scored.signals.age ?? '?'} score=${scored.score} photoAge=${face.estimatedAge ?? '?'} placeholder=${usedPlaceholder}`
   )
   return tag
 }

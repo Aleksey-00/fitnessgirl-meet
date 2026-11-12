@@ -64,10 +64,17 @@ const total = ref(firstPage.value?.total || 0)
 const loadingMore = ref(false)
 const switching = ref(false)
 const loadError = ref('')
-/** Hide broken VK CDN images (expired hotlinks) instead of browser alt-icon. */
+/** Hide broken VK CDN images (expired hotlinks) — fall back to cute placeholder. */
 const brokenPhotos = reactive<Record<string, true>>({})
 function markPhotoBroken(id: string) {
   brokenPhotos[id] = true
+}
+function catalogPlaceholder(gender: 'female' | 'male') {
+  return gender === 'male' ? '/placeholders/catalog-male.svg' : '/placeholders/catalog-female.svg'
+}
+function cardPhotoSrc(p: Profile) {
+  if (p.photoUrl && !brokenPhotos[p.id]) return p.photoUrl
+  return catalogPlaceholder(catalogGender.value)
 }
 const bootError = computed(() => {
   if (!firstError.value) return ''
@@ -296,8 +303,7 @@ useJsonLd([
         >
           <div class="profile-card__media">
             <NuxtImg
-              v-if="p.photoUrl && !brokenPhotos[p.id]"
-              :src="p.photoUrl"
+              :src="cardPhotoSrc(p)"
               :alt="p.displayName"
               width="400"
               height="500"

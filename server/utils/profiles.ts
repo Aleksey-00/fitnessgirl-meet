@@ -89,7 +89,8 @@ export async function listVisibleProfilesPage(opts: {
   const ageSafe = {
     isHidden: false,
     age: { gte: 18, lte: 35 },
-    photoAgeStatus: 'ok',
+    // Real face-pass photos + cute placeholders when no usable VK photo passed checks.
+    photoAgeStatus: { in: ['ok', 'placeholder'] },
     photoGender: catalogGender,
     photoUrl: { not: null },
     AND: baseAnd

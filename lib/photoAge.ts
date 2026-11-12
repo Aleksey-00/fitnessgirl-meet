@@ -30,9 +30,9 @@ const MIN_FEMALE_PROB = Number(process.env.PHOTO_MIN_FEMALE_PROB || 0.62)
 const MIN_MALE_PROB = Number(process.env.PHOTO_MIN_MALE_PROB || 0.62)
 
 /** Profiles that must not appear in any gender catalog. */
-export function shouldHideForPhotoAge(status: PhotoAgeEstimate['status']) {
-  // status 'ok' = clear adult face (female or male). Legacy 'male' status still hides until re-check.
-  return status !== 'ok'
+export function shouldHideForPhotoAge(status: PhotoAgeEstimate['status'] | 'placeholder' | string) {
+  // 'ok' = clear adult face; 'placeholder' = no usable photo but profile stays visible with stub art.
+  return status !== 'ok' && status !== 'placeholder'
 }
 
 /** Clear adult face of the expected gender. */
