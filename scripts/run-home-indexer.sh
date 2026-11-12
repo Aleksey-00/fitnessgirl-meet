@@ -112,10 +112,9 @@ Path('/tmp/fg-pg.user').write_text(env.get('POSTGRES_USER','fitnessgirl'))
 Path('/tmp/fg-pg.db').write_text(env.get('POSTGRES_DB','fitnessgirl'))
 print('token_len', len(env.get('VK_ACCESS_TOKEN','')))
 \""
-"${SCP[@]}" \
-  "${VPS}:/tmp/fg-vk.token" "${VPS}:/tmp/fg-pg.pw" \
-  "${VPS}:/tmp/fg-pg.user" "${VPS}:/tmp/fg-pg.db" \
-  "$RUN_DIR/"
+for f in fg-vk.token fg-pg.pw fg-pg.user fg-pg.db; do
+  "${SSH[@]}" "cat /tmp/${f}" >"$RUN_DIR/${f}"
+done
 "${SSH[@]}" "rm -f /tmp/fg-vk.token /tmp/fg-pg.pw /tmp/fg-pg.user /tmp/fg-pg.db"
 chmod 600 "$RUN_DIR"/*
 
@@ -163,6 +162,7 @@ docker run --rm --network=host \
   -e "VK_DAILY_LIMIT=${DAILY_LIMIT}" \
   -e "VK_REQUEST_DELAY_MS=${VK_REQUEST_DELAY_MS:-3000}" \
   -v "$ROOT/scripts/index-vk.ts:/app/scripts/index-vk.ts:ro" \
+  -v "$ROOT/lib:/app/lib:ro" \
   -v "$ROOT/server/utils:/app/server/utils:ro" \
   fitnessgirl-meet-indexer:latest \
   npx tsx scripts/index-vk.ts "${MODE_ARGS[@]}"

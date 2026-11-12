@@ -36,6 +36,10 @@ elif [[ "$probe_rc" -ne 0 ]]; then
   exit "$probe_rc"
 fi
 
+# Stale renew flag from an older night must not keep alarming after a good probe.
+rm -f "$HOME/fg-logs/vk-needs-renew.flag" \
+  /mnt/c/Users/aazor/fg-logs/vk-needs-renew.flag 2>/dev/null || true
+
 echo "[$(date -Iseconds)] home daily BOTH sexes start limit=${FG_DAILY_LIMIT} delay=${VK_REQUEST_DELAY_MS}ms salt=${VK_INDEX_SALT}"
 bash "$ROOT/scripts/_run-home-indexer-dockerdesk.sh" --daily --sex=both
 echo "[$(date -Iseconds)] home daily BOTH sexes done"

@@ -223,6 +223,7 @@ start_poll_container() {
   docker run -d --name "$POLL_NAME" \
     --label fg.bridge.pid="$$" \
     -v "$ROOT/scripts:/app/scripts:ro" \
+    -v "$ROOT/lib:/app/lib:ro" \
     -e DATABASE_URL \
     -e TELEGRAM_BOT_TOKEN \
     -e TELEGRAM_ADMIN_CHAT_ID \

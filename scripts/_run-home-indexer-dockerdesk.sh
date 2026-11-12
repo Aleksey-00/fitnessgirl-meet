@@ -67,6 +67,12 @@ if ! docker image inspect fitnessgirl-meet-indexer:latest >/dev/null 2>&1; then
   echo "    loading fitnessgirl-meet-indexer:latest from VPS…"
   "${SSH[@]}" "docker save fitnessgirl-meet-indexer:latest" | docker load
 fi
+# Host bind-mounts below keep TS sources (lib/, scripts/) fresh even when the
+# Docker image is weeks old — missing /app/lib/catalogPhoto caused 2026-11-13 fail.
+if [[ ! -f "$ROOT/lib/catalogPhoto.ts" ]]; then
+  echo "FATAL: missing $ROOT/lib/catalogPhoto.ts (required by index-vk)" >&2
+  exit 1
+fi
 
 echo "==> expose Postgres on VPS localhost:5432"
 EXPOSE_OUT="$("${SSH[@]}" "bash -s" <<'REMOTE'
@@ -117,10 +123,10 @@ Path('/tmp/fg-pg.user').write_text(env.get('POSTGRES_USER','fitnessgirl'))
 Path('/tmp/fg-pg.db').write_text(env.get('POSTGRES_DB','fitnessgirl'))
 print('token_len', len(env.get('VK_ACCESS_TOKEN','')))
 \""
-"${SCP[@]}" \
-  "${VPS}:/tmp/fg-vk.token" "${VPS}:/tmp/fg-pg.pw" \
-  "${VPS}:/tmp/fg-pg.user" "${VPS}:/tmp/fg-pg.db" \
-  "$RUN_DIR/"
+# Prefer ssh+cat over scp: concurrent scp with the DB tunnel has hung on Windows/WSL.
+for f in fg-vk.token fg-pg.pw fg-pg.user fg-pg.db; do
+  "${SSH[@]}" "cat /tmp/${f}" >"$RUN_DIR/${f}"
+done
 "${SSH[@]}" "rm -f /tmp/fg-vk.token /tmp/fg-pg.pw /tmp/fg-pg.user /tmp/fg-pg.db"
 chmod 600 "$RUN_DIR"/*
 
@@ -146,7 +152,7 @@ for line in Path('${PROJECT_DIR}/.env').read_text().splitlines():
 Path('/tmp/fg-vk.token').write_text(env.get('VK_ACCESS_TOKEN',''))
 print('token_len', len(env.get('VK_ACCESS_TOKEN','')))
 \""
-  "${SCP[@]}" "${VPS}:/tmp/fg-vk.token" "$RUN_DIR/"
+  "${SSH[@]}" "cat /tmp/fg-vk.token" >"$RUN_DIR/fg-vk.token"
   "${SSH[@]}" "rm -f /tmp/fg-vk.token"
   chmod 600 "$RUN_DIR/fg-vk.token"
   export VK_ACCESS_TOKEN="$(cat "$RUN_DIR/fg-vk.token")"
@@ -241,6 +247,7 @@ docker run --rm \
   -e "VK_INDEX_SEX=${VK_INDEX_SEX:-}" \
   -e "VK_INDEX_SALT=${VK_INDEX_SALT:-0}" \
   -v "$ROOT/scripts/index-vk.ts:/app/scripts/index-vk.ts:ro" \
+  -v "$ROOT/lib:/app/lib:ro" \
   -v "$ROOT/server/utils:/app/server/utils:ro" \
   fitnessgirl-meet-indexer:latest \
   npx tsx scripts/index-vk.ts "${MODE_ARGS[@]}"
