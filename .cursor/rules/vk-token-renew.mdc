@@ -30,4 +30,9 @@ Do not substitute another `client_id`, add `scope=offline`, or use `id.vk.com` /
 
 - Before any daily index if probe fails (expired / invalid / wrong IP).
 - Proactively when the user asks to run daily index and the token is near expiry.
+- **Every day ~23:00** Windows task `FitnessgirlVkTokenRenewCheck` probes the token. If dead it writes `~/fg-logs/vk-needs-renew.flag`, opens the canonical OAuth URL, and toasts the user — when you see that (or the flag), **renew immediately** in Cursor browser so 00:00 daily index can run.
 - Do **not** ask the user to copy the token if the Cursor browser VK session works — renew yourself.
+
+## Marker file
+
+If `~/fg-logs/vk-needs-renew.flag` (or `%USERPROFILE%\fg-logs\vk-needs-renew.flag`) exists, treat renew as urgent and clear the flag only after a successful `vk-renew-classic.sh` + probe.

@@ -129,7 +129,9 @@ PGUSER="$(cat "$RUN_DIR/fg-pg.user")"
 PGDB="$(cat "$RUN_DIR/fg-pg.db")"
 export VK_ACCESS_TOKEN="$(cat "$RUN_DIR/fg-vk.token")"
 
-echo -n "==> public IP (must match VK token bind): "; curl -4 -sS --max-time 10 https://api.ipify.org; echo
+echo -n "==> public IP (must match VK token bind): "
+curl -4 -sS --max-time 10 https://api.ipify.org 2>/dev/null || curl -4 -sS --max-time 10 https://ifconfig.me/ip 2>/dev/null || echo "unknown(network)"
+echo
 
 OAUTH_URL="$(tr -d '\r\n' <"$ROOT/scripts/vk-oauth-classic.url" 2>/dev/null || true)"
 OAUTH_URL="${OAUTH_URL:-https://oauth.vk.com/authorize?client_id=54762499&display=page&redirect_uri=https://oauth.vk.com/blank.html&response_type=token&v=5.199}"

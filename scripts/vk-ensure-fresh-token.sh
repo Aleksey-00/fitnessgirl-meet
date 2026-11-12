@@ -18,6 +18,7 @@ if [[ -z "${VK_ACCESS_TOKEN}" ]]; then
   exit 42
 fi
 
+set +e
 python3 - <<'PY'
 import json, os, urllib.parse, urllib.request, sys
 token = os.environ["VK_ACCESS_TOKEN"]
@@ -41,6 +42,7 @@ if code in (5, 15) or "expired" in msg.lower() or "invalid access_token" in msg.
 sys.exit(2)
 PY
 status=$?
+set -e
 if [[ "$status" -eq 42 ]]; then
   echo "RENEW_URL=$OAUTH_URL"
 fi
